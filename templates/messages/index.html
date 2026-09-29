@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}Messages — CareerIQ{% endblock %}
+{% block page_title %}Messages{% endblock %}
+{% block content %}
+<div class="messages-layout" id="msgLayout">
+
+  <!-- Left: threads -->
+  <div class="thread-list" id="threadList">
+    <div style="padding:10px 12px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:center">
+      <span style="font-weight:700;font-size:.95rem;flex:1">Messages</span>
+      <button class="btn btn-primary btn-sm" onclick="showNewMsg()">New</button>
+    </div>
+
+    <!-- Connection picker (hidden by default) -->
+    <div id="newMsgPanel" style="display:none;border-bottom:1px solid var(--border);padding:10px 12px">
+      <input class="chat-input" id="newMsgSearch" placeholder="Search connections…"
+             oninput="searchConns(this.value)" style="border-radius:8px"/>
+      <div id="connectionsList" style="margin-top:8px;max-height:200px;overflow-y:auto"></div>
+    </div>
+
+    <div id="threadItems"><div class="empty-state" style="padding:20px;font-size:.82rem">No conversations yet.</div></div>
+  </div>
+
+  <!-- Right: chat -->
+  <div class="chat-area" id="chatArea">
+    <div class="chat-empty" id="chatEmpty">
+      <div style="text-align:center">
+        <div style="font-size:3rem;margin-bottom:12px">💬</div>
+        <div style="font-weight:700;font-size:1.1rem;margin-bottom:6px">Your Messages</div>
+        <div style="font-size:.875rem;color:var(--text2);margin-bottom:20px;max-width:260px;margin-left:auto;margin-right:auto">
+          Select a conversation from the left, or start a new one.
+        </div>
+        <button class="btn btn-primary btn-sm" onclick="showNewMsg()">+ Start a conversation</button>
+      </div>
+    </div>
+
+    <div id="chatActive" style="display:none;flex-direction:column;height:100%">
+      <div class="chat-header" style="display:flex;align-items:center;gap:12px;padding:14px 20px;border-bottom:1px solid var(--border)">
+        <div id="chatAvatarWrap"><div class="thread-avatar" id="chatAvatar">?</div></div>
+        <div style="flex:1">
+          <div style="font-weight:700" id="chatName">—</div>
+          <div style="font-size:.75rem;color:var(--text3)" id="chatStatus">Active</div>
+        </div>
+      </div>
+      <div class="typing-indicator" id="typingIndicator">
+        <span id="typingName">Someone</span> is typing
+        <span class="typing-dots"><span></span><span></span><span></span></span>
+      </div>
+      <div class="chat-messages" id="chatMessages" style="flex:1;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:4px"></div>
+      <div class="chat-input-row" style="padding:12px 16px;border-top:1px solid var(--border);display:flex;gap:10px;align-items:center">
+        <input class="chat-input" id="chatInput" placeholder="Write a message…"
+               oninput="sendTyping(true)"
+               onblur="sendTyping(false)"
+               onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendMsg();}"/>
+        <button class="btn btn-primary" onclick="sendMsg()" style="padding:9px 16px;flex-shrink:0">
+          <svg viewBox="0 0 24 24" style="width:16px;height:16px;fill:white;stroke:none"><path d="M22 2L11 13M22 2L15 22l-4-9-9-4 20-7z"/></svg>
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+let activeId = null, activeInfo = {};
+let allConns  = [];
+let typingTimer = null;
+
+(async () => {
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='messages']")?.classList.add("active");
+  await Promise.all([loadThreads(), loadAllConns()]);
+
+  // Auto-open from URL param ?user=ID
+  const params = new URLSearchParams(window.location.search);
+  const uid = params.get("user");
+  if (uid) {
+    history.replaceState({}, "", "/messages");
+    openChatById(parseInt(uid));
+  }
+
+  // Setup SocketIO
+  setTimeout(() => {
+    const sock = getSocket();
+    if (!sock) return;
+    sock.on("new_message", (msg) => {
+      if (msg.sender_id === activeId || msg.receiver_id === activeId) {
+        appendMessage(msg);
+      }
+      loadThreads();
+    });
+    sock.on("user_typing", (data) => {
+      if (data.user_id !== activeId) return;
+      const el = document.getElementById("typingIndicator");
+      el.style.display = data.is_typing ? "block" : "none";
+    });
+  }, 1200);
+})();
+
+async function openChatById(uid) {
+  try {
+    const r = await API.get("/profile/public/" + uid);
+    const u = r.user;
+    openChat(u.id, u.full_name, r.profile?.headline || "", u.avatar, u.avatar_url);
+  } catch(e) { console.error(e); }
+}
+
+async function loadAllConns() {
+  try {
+    const r = await API.get("/connections/");
+    allConns = r.connections;
+    renderConnList(allConns);
+  } catch {}
+}
+
+function renderConnList(conns) {
+  const c = document.getElementById("connectionsList");
+  if (!conns.length) {
+    c.innerHTML = '<div style="color:var(--text3);font-size:.82rem;padding:8px">No connections. <a href="/connections" style="color:var(--accent)">Find people →</a></div>';
+    return;
+  }
+  c.innerHTML = conns.map(cn => {
+    const u = cn.other_user; if (!u) return "";
+    const av = u.avatar_url
+      ? `<img src="${u.avatar_url}" style="width:36px;height:36px;border-radius:50%;object-fit:cover"/>`
+      : `<div style="width:36px;height:36px;border-radius:50%;background:var(--accent);color:#fff;display:grid;place-items:center;font-weight:700;font-size:.9rem;flex-shrink:0">${u.avatar}</div>`;
+    return `<div onclick="pickConn(${u.id},'${escHtml(u.full_name)}','${escHtml(u.headline||"")}','${u.avatar}','${u.avatar_url||''}')"
+      style="display:flex;align-items:center;gap:10px;padding:8px;border-radius:8px;cursor:pointer;transition:background .15s"
+      onmouseenter="this.style.background='var(--bg3)'" onmouseleave="this.style.background=''">
+      ${av}
+      <div>
+        <div style="font-size:.875rem;font-weight:600">${escHtml(u.full_name)}</div>
+        <div style="font-size:.75rem;color:var(--text3)">${escHtml(u.headline||"")}</div>
+      </div>
+    </div>`;
+  }).join("");
+}
+
+function searchConns(q) {
+  if (!q.trim()) { renderConnList(allConns); return; }
+  renderConnList(allConns.filter(c => c.other_user && c.other_user.full_name.toLowerCase().includes(q.toLowerCase())));
+}
+
+function showNewMsg() {
+  const panel = document.getElementById("newMsgPanel");
+  const isOpen = panel.style.display !== "none";
+  panel.style.display = isOpen ? "none" : "block";
+  if (!isOpen) document.getElementById("newMsgSearch").focus();
+}
+
+function pickConn(uid, name, headline, avatar, avatarUrl) {
+  document.getElementById("newMsgPanel").style.display = "none";
+  document.getElementById("newMsgSearch").value = "";
+  renderConnList(allConns);
+  openChat(uid, name, headline, avatar, avatarUrl);
+}
+
+async function loadThreads() {
+  const c = document.getElementById("threadItems");
+  try {
+    const r = await API.get("/messages/threads");
+    if (!r.threads.length) {
+      c.innerHTML = '<div class="empty-state" style="padding:20px;font-size:.82rem">No conversations yet.<br>Click <strong>New</strong> to start one.</div>';
+      return;
+    }
+    c.innerHTML = r.threads.map(t => {
+      const av = t.avatar_url
+        ? `<img src="${t.avatar_url}" style="width:42px;height:42px;border-radius:50%;object-fit:cover;flex-shrink:0"/>`
+        : `<div class="thread-avatar">${t.avatar}</div>`;
+      return `<div class="thread-item ${activeId === t.user_id ? "active" : ""}" id="thread-${t.user_id}"
+           onclick="openChat(${t.user_id},'${escHtml(t.full_name)}','${escHtml(t.headline||"")}','${t.avatar}','${t.avatar_url||''}')">
+        ${av}
+        <div class="thread-info">
+          <div class="thread-name">${escHtml(t.full_name)}</div>
+          <div class="thread-preview">${escHtml(t.last_message)}</div>
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px;flex-shrink:0">
+          <div class="thread-time">${timeAgo(t.last_time)}</div>
+          ${t.unread ? `<div style="width:8px;height:8px;border-radius:50%;background:var(--accent)"></div>` : ""}
+        </div>
+      </div>`;
+    }).join("");
+  } catch {}
+}
+
+function openChat(uid, name, headline, avatar, avatarUrl) {
+  activeId = uid;
+  activeInfo = { name, avatar, avatarUrl };
+
+  document.querySelectorAll(".thread-item").forEach(t => t.classList.remove("active"));
+  document.getElementById("thread-" + uid)?.classList.add("active");
+  document.getElementById("chatEmpty").style.display = "none";
+  document.getElementById("chatActive").style.display = "flex";
+
+  // Set header avatar
+  const aw = document.getElementById("chatAvatarWrap");
+  aw.innerHTML = avatarUrl
+    ? `<img src="${avatarUrl}" style="width:42px;height:42px;border-radius:50%;object-fit:cover"/>`
+    : `<div class="thread-avatar">${avatar}</div>`;
+  document.getElementById("chatName").textContent   = name;
+  document.getElementById("chatStatus").textContent = "CareerIQ member";
+
+  // Join socket room
+  const sock  = getSocket();
+  const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+  if (sock && token) sock.emit("join_conversation", { token, other_id: uid });
+
+  loadMessages(uid);
+  document.getElementById("chatInput").focus();
+}
+
+async function loadMessages(uid) {
+  const c = document.getElementById("chatMessages");
+  c.innerHTML = `<div style="display:flex;flex-direction:column;gap:8px">
+    ${[80,120,60,100,140].map(w => `<div style="display:flex;justify-content:${w>100?'flex-end':'flex-start'}">
+      <div class="skeleton" style="height:40px;width:${w}px;border-radius:16px"></div>
+    </div>`).join("")}
+  </div>`;
+
+  try {
+    const r = await API.get("/messages/" + uid);
+    c.innerHTML = "";
+    if (!r.messages.length) {
+      c.innerHTML = '<div style="text-align:center;color:var(--text3);font-size:.85rem;padding:32px">No messages yet. Say something! 👋</div>';
+      return;
+    }
+    r.messages.forEach(m => appendMessage(m));
+    c.scrollTop = c.scrollHeight;
+  } catch {
+    c.innerHTML = '<div class="empty-state">Could not load messages.</div>';
+  }
+}
+
+function appendMessage(m) {
+  const c = document.getElementById("chatMessages");
+  const empty = c.querySelector("[style*='No messages']");
+  if (empty) empty.remove();
+
+  const isMe = m.is_mine;
+  const wrap = document.createElement("div");
+  wrap.style.cssText = `display:flex;justify-content:${isMe ? "flex-end" : "flex-start"};margin-bottom:2px`;
+  wrap.innerHTML = `<div class="msg-bubble ${isMe ? "msg-mine" : "msg-theirs"}">
+    ${escHtml(m.content)}
+    <div class="msg-time">${timeAgo(m.created_at)}${isMe && m.is_read ? ' <span style="color:rgba(255,255,255,.7)">✓✓</span>' : ""}</div>
+  </div>`;
+  c.appendChild(wrap);
+  c.scrollTop = c.scrollHeight;
+}
+
+// Typing
+function sendTyping(isTyping) {
+  const sock  = getSocket();
+  const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+  if (!sock || !token || !activeId) return;
+  clearTimeout(typingTimer);
+  sock.emit("typing", { token, receiver_id: activeId, is_typing: isTyping });
+  if (isTyping) typingTimer = setTimeout(() => sendTyping(false), 3000);
+}
+
+async function sendMsg() {
+  if (!activeId) return;
+  const inp = document.getElementById("chatInput");
+  const txt = inp.value.trim();
+  if (!txt) return;
+  inp.value = "";
+  sendTyping(false);
+
+  const sock  = getSocket();
+  const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+  if (sock && sock.connected) {
+    sock.emit("send_message", { token, receiver_id: activeId, content: txt });
+  } else {
+    try {
+      const r = await API.post("/messages/" + activeId, { content: txt });
+      appendMessage(r.msg);
+      loadThreads();
+    } catch(e) { alert(e.message); inp.value = txt; }
+  }
+}
+</script>
+{% endblock %}

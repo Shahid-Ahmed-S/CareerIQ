@@ -1,0 +1,59 @@
+<!DOCTYPE html><html lang="en"><head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Sign In — CareerIQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="/static/css/main.css"/>
+<script src="/static/js/api.js"></script>
+</head>
+<body class="auth-page">
+<div class="auth-split">
+  <div class="auth-brand">
+    <div class="brand-inner">
+      <div class="brand-logo">
+        <span class="logo-mark" style="width:40px;height:40px;font-size:20px">C</span>
+        <span class="logo-text" style="font-size:1.3rem">CareerIQ</span>
+      </div>
+      <h2 class="brand-tagline">Your intelligent career co-pilot.</h2>
+      <p class="brand-sub">Skill gap analysis, job matching, AI recommendations, and a professional network — all in one place.</p>
+      <div class="brand-features">
+        <div class="brand-feature"><div class="brand-feature-icon">📊</div>Skill gap analysis & learning paths</div>
+        <div class="brand-feature"><div class="brand-feature-icon">💼</div>Personalised job recommendations</div>
+        <div class="brand-feature"><div class="brand-feature-icon">🤝</div>Professional network & messaging</div>
+        <div class="brand-feature"><div class="brand-feature-icon">🏆</div>Share achievements & milestones</div>
+      </div>
+    </div>
+  </div>
+  <div class="auth-form-panel">
+    <div class="auth-form-inner">
+      <h1 class="auth-title">Welcome back</h1>
+      <p class="auth-subtitle">Sign in to continue to CareerIQ</p>
+      <div id="err" class="alert alert-error" style="display:none"></div>
+      <div class="field"><label>Email address</label><input type="email" id="email" placeholder="you@example.com" autocomplete="email"/></div>
+      <div class="field"><label>Password</label><input type="password" id="password" placeholder="••••••••" autocomplete="current-password"/></div>
+      <button class="btn btn-primary btn-full" id="submitBtn" style="margin-top:4px;padding:10px">
+        <span id="lbl">Sign in</span><span class="btn-spinner" id="sp" style="display:none"></span>
+      </button>
+      <div class="auth-divider">or</div>
+      <p class="auth-switch">Don't have an account? <a href="/register">Create one free</a></p>
+    </div>
+  </div>
+</div>
+<script>
+if(API.isLoggedIn()) window.location.href="/feed";
+async function doLogin(){
+  const err=document.getElementById("err"),lbl=document.getElementById("lbl"),sp=document.getElementById("sp"),btn=document.getElementById("submitBtn");
+  err.style.display="none"; lbl.style.display="none"; sp.style.display="inline-block"; btn.disabled=true;
+  try{
+    const r=await API.post("/auth/login",{email:document.getElementById("email").value,password:document.getElementById("password").value});
+    API.saveSession(r);
+    window.location.href="/feed";
+  }catch(e){
+    err.textContent=e.message; err.style.display="block";
+    lbl.style.display="inline"; sp.style.display="none"; btn.disabled=false;
+  }
+}
+document.getElementById("submitBtn").addEventListener("click",doLogin);
+document.addEventListener("keydown",e=>{if(e.key==="Enter")doLogin();});
+</script>
+</body></html>

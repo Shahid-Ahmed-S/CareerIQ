@@ -1,0 +1,280 @@
+{% extends "base.html" %}
+{% block title %}My Profile — CareerIQ{% endblock %}
+{% block page_title %}My Profile{% endblock %}
+{% block content %}
+<div class="two-col-layout">
+  <div>
+    <div class="card completeness-card">
+      <div class="completeness-left">
+        <div class="completeness-ring-wrap">
+          <svg viewBox="0 0 80 80"><circle cx="40" cy="40" r="32" fill="none" stroke="var(--border)" stroke-width="6"/><circle id="arc" cx="40" cy="40" r="32" fill="none" stroke="var(--accent)" stroke-width="6" stroke-linecap="round" stroke-dasharray="201" stroke-dashoffset="201" transform="rotate(-90 40 40)" style="transition:stroke-dashoffset 1s ease"/></svg>
+          <div class="completeness-pct" id="cpct">0%</div>
+        </div>
+        <div><div style="font-weight:600">Profile strength</div><div id="clabel" style="font-size:.82rem;color:var(--text2)">Loading…</div></div>
+      </div>
+      <div id="ctips" class="completeness-tips"></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Profile details</h2><button class="btn btn-sm btn-primary" onclick="saveProfile()">Save changes</button></div>
+      <div id="profAlert" class="alert" style="display:none"></div>
+      <!-- Avatar upload -->
+      <div style="display:flex;align-items:center;gap:16px;margin-bottom:20px;padding-bottom:16px;border-bottom:1px solid var(--border)">
+        <div class="avatar-upload-wrap" onclick="document.getElementById('avatarInput').click()">
+          <div id="profileAvatarWrap"><div class="person-avatar-lg" id="profileAvatar">?</div></div>
+          <div class="avatar-upload-overlay">📷 Change</div>
+          <input type="file" id="avatarInput" accept="image/*" style="display:none" onchange="uploadAvatar(this)"/>
+        </div>
+        <div>
+          <div style="font-weight:600" id="profileNameDisplay">Your Name</div>
+          <div style="font-size:.82rem;color:var(--text2);margin-top:4px">
+            Public profile: <a id="publicProfileLink" href="#" style="color:var(--accent)">careeriq.com/u/...</a>
+          </div>
+          <div id="avatarAlert" class="alert" style="display:none;margin-top:8px;margin-bottom:0"></div>
+        </div>
+      </div>
+      <div class="field-row"><div class="field"><label>Current role</label><input type="text" id="current_role"/></div><div class="field"><label>Desired role</label><input type="text" id="desired_role"/></div></div>
+      <div class="field"><label>Headline</label><input type="text" id="headline" placeholder="A short professional headline"/></div>
+      <div class="field"><label>Bio</label><textarea id="bio" rows="3" placeholder="Tell us about yourself…"></textarea></div>
+      <div class="field-row"><div class="field"><label>Location</label><input type="text" id="location" placeholder="City, Country"/></div><div class="field"><label>Years experience</label><input type="number" id="years_experience" min="0" step="0.5"/></div></div>
+      <div class="field-row"><div class="field"><label>LinkedIn</label><input type="url" id="linkedin_url" placeholder="https://linkedin.com/in/…"/></div><div class="field"><label>GitHub</label><input type="url" id="github_url" placeholder="https://github.com/…"/></div></div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Resume</h2><span style="font-size:.78rem;color:var(--text3)">PDF or DOCX · auto-extracts skills</span></div>
+      <div id="resumeAlert" class="alert" style="display:none"></div>
+      <div class="resume-upload-area" id="dropZone">
+        <svg viewBox="0 0 24 24" style="width:32px;height:32px;color:var(--text3)"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+        <p>Drag & drop or <label for="resumeFile" style="color:var(--accent);cursor:pointer">browse</label></p>
+        <p style="font-size:.78rem;color:var(--text3)">PDF or DOCX up to 5MB</p>
+        <input type="file" id="resumeFile" accept=".pdf,.docx" style="display:none"/>
+      </div>
+      <div id="currentResume" style="display:none" class="current-resume">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span id="resumeFileName">resume.pdf</span>
+        <a id="resumeLink" href="#" target="_blank" style="font-size:.78rem;color:var(--accent)">View</a>
+      </div>
+      <div id="resumeParsed" style="display:none" class="resume-parsed">
+        <div id="parseStats"></div>
+        <div id="parsedSkills" style="display:flex;flex-wrap:wrap;gap:6px;margin-top:8px"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Phone verification</h2><span id="phoneBadge" style="display:none" class="verified-badge">✓ Verified</span></div>
+      <div id="phoneAlert" class="alert" style="display:none"></div>
+      <div class="field-row" style="align-items:flex-end">
+        <div class="field" style="margin-bottom:0"><label>Phone number</label><input type="tel" id="phoneInput" placeholder="+1 234 567 8900"/></div>
+        <button class="btn btn-outline btn-sm" onclick="sendOtp()">Send OTP</button>
+      </div>
+      <div id="otpSection" style="display:none;margin-top:14px">
+        <div class="field-row" style="align-items:flex-end">
+          <div class="field" style="margin-bottom:0"><label>6-digit OTP</label><input type="text" id="otpInput" placeholder="123456" maxlength="6"/></div>
+          <button class="btn btn-primary btn-sm" onclick="verifyOtp()">Verify</button>
+        </div>
+        <p style="font-size:.75rem;color:var(--text3);margin-top:6px">Check your terminal for the OTP (dev mode)</p>
+      </div>
+    </div>
+  </div>
+
+  <div>
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">My skills</h2><span id="skillCount" class="count-badge">0</span></div>
+      <div class="add-skill-form">
+        <input type="text" id="newSkill" placeholder="Skill name" class="input-inline"/>
+        <select id="newLevel" class="select-inline">
+          <option value="1">Beginner</option><option value="2" selected>Intermediate</option>
+          <option value="3">Advanced</option><option value="4">Expert</option>
+        </select>
+        <button class="btn btn-sm btn-primary" onclick="addSkill()">Add</button>
+      </div>
+      <div id="skillAlert" class="alert" style="display:none"></div>
+      <div id="skillsList" class="skills-table"><div class="empty-state">Loading…</div></div>
+    </div>
+  </div>
+</div>
+<script>
+const LVL={1:"Beginner",2:"Intermediate",3:"Advanced",4:"Expert"};
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='profile']")?.classList.add("active");
+  await Promise.all([loadProfile(),loadSkills(),loadCompleteness()]);
+  // Set public profile link
+  const u=API.getUser()||{};
+  const pl=document.getElementById("publicProfileLink");
+  if(pl&&u.id){ pl.href="/u/"+u.id; pl.textContent="View public profile →"; }
+  const pn=document.getElementById("profileNameDisplay");
+  if(pn&&u.full_name) pn.textContent=u.full_name;
+})();
+
+async function loadCompleteness(){
+  try{
+    const r=await API.get("/profile/completeness");
+    const pct=r.score;
+    document.getElementById("cpct").textContent=pct+"%";
+    const arc=document.getElementById("arc");
+    setTimeout(()=>arc.style.strokeDashoffset=(201-(pct/100)*201),100);
+    arc.style.stroke=pct>=80?"var(--green)":pct>=50?"var(--amber)":"var(--accent)";
+    document.getElementById("clabel").textContent=pct>=80?"Strong profile":pct>=50?"Good progress":"Getting started";
+    const tips=document.getElementById("ctips");
+    if(r.tips.length) tips.innerHTML="<p style='font-size:.78rem;color:var(--text3);margin-bottom:6px'>Next steps:</p>"+r.tips.map(t=>`<div class="tip-item">→ ${t}</div>`).join("");
+  }catch(e){console.error(e);}
+}
+
+async function loadProfile(){
+  try{
+    const r=await API.get("/profile/");
+    const p=r.profile;
+    ["current_role","desired_role","headline","bio","location","years_experience","linkedin_url","github_url"].forEach(f=>{
+      const el=document.getElementById(f);
+      if(el) el.value=p[f]||"";
+    });
+    // Load avatar
+    const u2=API.getUser()||{};
+    const aw=document.getElementById("profileAvatarWrap");
+    if(u2.avatar_url&&aw) aw.innerHTML=`<img src="${u2.avatar_url}" class="avatar-img-lg" alt="avatar"/>`;
+    else{ const av=document.getElementById("profileAvatar"); if(av) av.textContent=(u2.full_name||"?")[0].toUpperCase(); }
+    if(p.resume_url){
+      document.getElementById("currentResume").style.display="flex";
+      document.getElementById("resumeLink").href=p.resume_url;
+      document.getElementById("resumeFileName").textContent=p.resume_url.split("/").pop();
+    }
+  }catch(e){console.error(e);}
+  try{
+    const r=await API.get("/auth/me");
+    const u=r.user;
+    if(u.phone_number) document.getElementById("phoneInput").value=u.phone_number;
+    if(u.phone_verified) document.getElementById("phoneBadge").style.display="inline-flex";
+  }catch(e){}
+}
+
+async function loadSkills(){
+  const c=document.getElementById("skillsList");
+  try{
+    const r=await API.get("/profile/skills");
+    document.getElementById("skillCount").textContent=r.skills.length;
+    if(!r.skills.length){c.innerHTML='<div class="empty-state">No skills yet.</div>';return;}
+    c.innerHTML=r.skills.map(s=>`<div class="skill-row">
+      <div class="skill-row-name">${s.skill_name}</div>
+      <div class="skill-row-category">${s.category||"—"}</div>
+      <div class="level-bar"><div class="level-fill" style="width:${(s.proficiency_level/4)*100}%"></div></div>
+      <div class="skill-row-level">${LVL[s.proficiency_level]}</div>
+      <button class="btn-icon btn-icon-danger" onclick="removeSkill(${s.skill_id})">
+        <svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/></svg>
+      </button>
+    </div>`).join("");
+  }catch(e){c.innerHTML='<div class="empty-state">Failed to load.</div>';}
+}
+
+async function addSkill(){
+  const name=document.getElementById("newSkill").value.trim();
+  const level=parseInt(document.getElementById("newLevel").value);
+  const alert=document.getElementById("skillAlert");
+  if(!name) return;
+  try{
+    await API.post("/profile/skills",{skill_name:name,proficiency_level:level});
+    document.getElementById("newSkill").value="";
+    showAlert(alert,"Skill added!","success");
+    await Promise.all([loadSkills(),loadCompleteness()]);
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+async function removeSkill(sid){
+  if(!confirm("Remove this skill?")) return;
+  try{await API.delete("/profile/skills/"+sid);await Promise.all([loadSkills(),loadCompleteness()]);}
+  catch(e){alert(e.message);}
+}
+
+async function saveProfile(){
+  const alert=document.getElementById("profAlert");
+  try{
+    await API.put("/profile/",{
+      current_role:document.getElementById("current_role").value,
+      desired_role:document.getElementById("desired_role").value,
+      headline:document.getElementById("headline").value,
+      bio:document.getElementById("bio").value,
+      location:document.getElementById("location").value,
+      years_experience:parseFloat(document.getElementById("years_experience").value)||0,
+      linkedin_url:document.getElementById("linkedin_url").value,
+      github_url:document.getElementById("github_url").value,
+    });
+    showAlert(alert,"Profile saved!","success");
+    await loadCompleteness();
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+// Resume upload
+const dz=document.getElementById("dropZone"),rf=document.getElementById("resumeFile");
+dz.addEventListener("click",()=>rf.click());
+dz.addEventListener("dragover",e=>{e.preventDefault();dz.classList.add("drag-over");});
+dz.addEventListener("dragleave",()=>dz.classList.remove("drag-over"));
+dz.addEventListener("drop",e=>{e.preventDefault();dz.classList.remove("drag-over");if(e.dataTransfer.files[0])uploadResume(e.dataTransfer.files[0]);});
+rf.addEventListener("change",()=>{if(rf.files[0])uploadResume(rf.files[0]);});
+
+async function uploadResume(file){
+  const alert=document.getElementById("resumeAlert"),parsed=document.getElementById("resumeParsed");
+  showAlert(alert,"Uploading and parsing resume…","success");
+  const fd=new FormData();fd.append("resume",file);
+  try{
+    const r=await fetch("/api/profile/upload-resume",{method:"POST",headers:{"Authorization":"Bearer "+localStorage.getItem("access_token")},body:fd});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||"Upload failed");
+    alert.style.display="none";
+    document.getElementById("currentResume").style.display="flex";
+    document.getElementById("resumeLink").href=d.resume_url;
+    document.getElementById("resumeFileName").textContent=file.name;
+    document.getElementById("parseStats").innerHTML=`<span class="resume-stat">${d.skills_added.length}</span> skills added from ${d.skills_added.length+((d.experience||[]).length)} items found`;
+    if(d.skills_added.length){
+      document.getElementById("parsedSkills").innerHTML=d.skills_added.slice(0,10).map(s=>`<span class="skill-chip skill-chip-amber">${s}</span>`).join("");
+    }
+    parsed.style.display="block";
+    await Promise.all([loadSkills(),loadCompleteness()]);
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+async function uploadAvatar(input){
+  const file=input.files[0]; if(!file) return;
+  const alert=document.getElementById("avatarAlert");
+  showAlert(alert,"Uploading…","success");
+  const fd=new FormData(); fd.append("avatar",file);
+  try{
+    const r=await fetch("/api/profile/upload-avatar",{method:"POST",headers:{"Authorization":"Bearer "+(sessionStorage.getItem("access_token")||localStorage.getItem("access_token"))},body:fd});
+    const d=await r.json();
+    if(!r.ok) throw new Error(d.error||"Upload failed");
+    const wrap=document.getElementById("profileAvatarWrap");
+    wrap.innerHTML=`<img src="${d.avatar_url}" class="avatar-img-lg" alt="avatar"/>`;
+    // Update topbar avatar too
+    const uw=document.getElementById("userAvatarWrap");
+    if(uw) uw.innerHTML=`<img src="${d.avatar_url}" class="avatar-img" alt="avatar"/>`;
+    const u=API.getUser()||{};
+    u.avatar_url=d.avatar_url;
+    sessionStorage.setItem("user",JSON.stringify(u));
+    showAlert(alert,"Photo updated!","success");
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+async function sendOtp(){
+  const phone=document.getElementById("phoneInput").value.trim();
+  const alert=document.getElementById("phoneAlert");
+  if(!phone){showAlert(alert,"Enter a phone number first.","error");return;}
+  try{
+    const r=await API.post("/auth/send-otp",{phone_number:phone});
+    document.getElementById("otpSection").style.display="block";
+    showAlert(alert,r.dev_otp?"DEV — OTP: "+r.dev_otp:"OTP sent to "+phone,"success");
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+async function verifyOtp(){
+  const otp=document.getElementById("otpInput").value.trim();
+  const alert=document.getElementById("phoneAlert");
+  if(!otp){showAlert(alert,"Enter the OTP.","error");return;}
+  try{
+    await API.post("/auth/verify-otp",{otp});
+    document.getElementById("phoneBadge").style.display="inline-flex";
+    document.getElementById("otpSection").style.display="none";
+    showAlert(alert,"Phone verified! ✓","success");
+    await loadCompleteness();
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+</script>
+{% endblock %}

@@ -1,0 +1,14 @@
+flask==3.0.3
+flask-sqlalchemy==3.1.1
+flask-migrate==4.0.7
+flask-jwt-extended==4.6.0
+flask-bcrypt==1.0.1
+flask-cors==4.0.1
+flask-socketio==5.3.6
+python-dotenv==1.0.1
+sqlalchemy==2.0.30
+itsdangerous==2.2.0
+sendgrid==6.11.0
+PyMuPDF==1.24.5
+python-docx==1.1.2
+eventlet==0.36.1

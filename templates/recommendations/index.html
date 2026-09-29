@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}For You — CareerIQ{% endblock %}
+{% block page_title %}For You{% endblock %}
+{% block content %}
+<div class="recs-layout">
+  <div style="display:flex;justify-content:space-between;align-items:center">
+    <p style="color:var(--text2);font-size:.9rem">Personalised job matches based on your skills.</p>
+    <button class="btn btn-outline btn-sm" onclick="loadAll()">Refresh</button>
+  </div>
+  <div class="recs-columns">
+    <div>
+      <h2 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:16px">Job matches</h2>
+      <div id="jobRecs"><div class="empty-state">Loading…</div></div>
+    </div>
+    <div>
+      <h2 style="font-family:var(--font-head);font-size:1rem;font-weight:700;margin-bottom:8px">Skills in demand</h2>
+      <p style="font-size:.82rem;color:var(--text2);margin-bottom:12px">Skills missing from your profile that appear in active job postings.</p>
+      <div id="skillRecs"><div class="empty-state">Loading…</div></div>
+    </div>
+  </div>
+</div>
+<script>
+(async()=>{requireAuth();loadUserChip();document.querySelector("[data-page='recommendations']")?.classList.add("active");await Currency.init();await loadAll();})();
+async function loadAll(){
+  document.getElementById("jobRecs").innerHTML='<div class="empty-state">Loading…</div>';
+  document.getElementById("skillRecs").innerHTML='<div class="empty-state">Loading…</div>';
+  const [jr,sr]=await Promise.allSettled([API.get("/recommendations/jobs?top_n=12"),API.get("/recommendations/skills?top_n=10")]);
+  const jc=document.getElementById("jobRecs");
+  if(jr.status==="fulfilled"&&jr.value.recommendations.length){
+    jc.innerHTML=jr.value.recommendations.map(item=>{
+      const j=item.job,pct=Math.round(item.score*100);
+      const cls=pct>=70?"mb-green":pct>=40?"mb-amber":"mb-red";
+      const sal=j.salary_min?`<span style="font-size:.78rem;color:var(--green);font-weight:500;margin-left:auto">${Currency.format(j.salary_min,j.salary_max)}</span>`:"";
+      return `<div class="rec-card">
+        <div class="rec-card-top">
+          <div class="job-company-logo">${(j.company||"?")[0]}</div>
+          <div style="flex:1"><div style="font-weight:600">${j.title}</div><div style="font-size:.8rem;color:var(--text2)">${j.company||"Unknown"} · ${j.location||"Remote"}</div></div>
+          <div class="match-badge ${cls}">${pct}%</div>
+        </div>
+        <div style="display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px">${item.reasons.map(r=>`<span class="reason-tag">✓ ${r}</span>`).join("")}</div>
+        <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+          <span class="tag tag-purple">${j.job_type||"—"}</span>
+          <span class="tag tag-green">${j.experience_level||"—"}</span>
+          ${sal}
+        </div>
+      </div>`;
+    }).join("");
+  }else{jc.innerHTML='<div class="empty-state">Add skills to your profile to see job matches.</div>';}
+  const sc=document.getElementById("skillRecs");
+  if(sr.status==="fulfilled"&&sr.value.skills_to_learn.length){
+    const max=sr.value.skills_to_learn[0].count;
+    sc.innerHTML=sr.value.skills_to_learn.map(s=>`<div class="demand-item">
+      <div class="demand-label"><span style="font-size:.875rem;font-weight:500">${s.name}</span><span style="font-size:.78rem;color:var(--text3)">${s.count} jobs</span></div>
+      <div class="demand-bar"><div class="demand-fill" style="width:${(s.count/max)*100}%"></div></div>
+    </div>`).join("");
+  }else{sc.innerHTML='<div class="empty-state">No suggestions available.</div>';}
+}
+</script>
+{% endblock %}

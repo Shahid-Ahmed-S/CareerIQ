@@ -1,0 +1,163 @@
+{% extends "base.html" %}
+{% block title %}Recruiter — CareerIQ{% endblock %}
+{% block page_title %}Recruiter Portal{% endblock %}
+{% block content %}
+<div class="recruiter-layout">
+  <div id="accessDenied" class="alert alert-error" style="display:none">This section is for recruiters only. <a href="/register">Register as a recruiter</a> to access this portal.</div>
+  <div id="recruiterContent" style="display:none">
+
+    <div class="rec-stats" id="dashStats"></div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Post a job</h2></div>
+        <div id="jobAlert" class="alert" style="display:none"></div>
+        <div class="field"><label>Job title *</label><input type="text" id="jTitle" placeholder="e.g. Senior Python Developer"/></div>
+        <div class="field-row">
+          <div class="field"><label>Company</label><input type="text" id="jCompany" placeholder="Company name"/></div>
+          <div class="field"><label>Location</label><input type="text" id="jLocation" placeholder="City or Remote"/></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Type</label><select id="jType"><option value="full-time">Full-time</option><option value="part-time">Part-time</option><option value="contract">Contract</option><option value="remote">Remote</option></select></div>
+          <div class="field"><label>Level</label><select id="jLevel"><option value="entry">Entry</option><option value="mid">Mid</option><option value="senior">Senior</option><option value="lead">Lead</option></select></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Min salary (USD)</label><input type="number" id="jSalMin" placeholder="80000"/></div>
+          <div class="field"><label>Max salary (USD)</label><input type="number" id="jSalMax" placeholder="120000"/></div>
+        </div>
+        <div class="field"><label>Description</label><textarea id="jDesc" rows="4" placeholder="Job description…"></textarea></div>
+        <div class="field"><label>Required skills (comma-separated)</label><input type="text" id="jSkills" placeholder="Python, Flask, PostgreSQL, Docker"/></div>
+        <button class="btn btn-primary" onclick="postJob()">Post job</button>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><h2 class="card-title">Find candidates</h2></div>
+        <div class="field-row" style="align-items:flex-end">
+          <div class="field" style="margin-bottom:0"><label>Skill</label><input type="text" id="cSkill" placeholder="e.g. Python"/></div>
+          <div class="field" style="margin-bottom:0"><label>Location</label><input type="text" id="cLoc" placeholder="e.g. London"/></div>
+          <button class="btn btn-primary btn-sm" onclick="searchCandidates()">Search</button>
+        </div>
+        <div id="candidates" style="margin-top:16px"><div class="empty-state">Enter a skill or location to search.</div></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">My job postings</h2></div>
+      <div id="myJobs"><div class="empty-state">Loading…</div></div>
+    </div>
+
+  </div>
+</div>
+<script>
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='recruiter']")?.classList.add("active");
+  try{
+    const r=await API.get("/recruiter/dashboard");
+    document.getElementById("recruiterContent").style.display="block";
+    document.getElementById("dashStats").innerHTML=`
+      <div class="stat-card"><div class="stat-icon si-blue"><svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg></div><div><div class="stat-value">${r.jobs_posted}</div><div class="stat-label">Jobs posted</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-green"><svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/></svg></div><div><div class="stat-value">${r.total_applications}</div><div class="stat-label">Total applicants</div></div></div>
+      <div class="stat-card"><div class="stat-icon si-amber"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg></div><div><div class="stat-value">—</div><div class="stat-label">Avg time to hire</div></div></div>`;
+    await loadMyJobs();
+  }catch(e){
+    if(e.message.includes("Recruiter")||e.message.includes("403")){
+      document.getElementById("accessDenied").style.display="block";
+    }
+  }
+})();
+
+async function postJob(){
+  const alert=document.getElementById("jobAlert");
+  const title=document.getElementById("jTitle").value.trim();
+  if(!title){showAlert(alert,"Job title is required.","error");return;}
+  const skillsRaw=document.getElementById("jSkills").value;
+  const skills=skillsRaw.split(",").map(s=>s.trim()).filter(Boolean).map(s=>({name:s,required_level:2,is_required:true}));
+  try{
+    await API.post("/recruiter/jobs",{
+      title,company:document.getElementById("jCompany").value,
+      location:document.getElementById("jLocation").value,
+      job_type:document.getElementById("jType").value,
+      experience_level:document.getElementById("jLevel").value,
+      description:document.getElementById("jDesc").value,
+      salary_min:parseInt(document.getElementById("jSalMin").value)||null,
+      salary_max:parseInt(document.getElementById("jSalMax").value)||null,
+      skills,
+    });
+    showAlert(alert,"Job posted successfully!","success");
+    ["jTitle","jCompany","jLocation","jDesc","jSkills","jSalMin","jSalMax"].forEach(id=>document.getElementById(id).value="");
+    await loadMyJobs();
+  }catch(e){showAlert(alert,e.message,"error");}
+}
+
+async function loadMyJobs(){
+  const c=document.getElementById("myJobs");
+  try{
+    const r=await API.get("/recruiter/jobs");
+    if(!r.jobs.length){c.innerHTML='<div class="empty-state">No jobs posted yet.</div>';return;}
+    c.innerHTML=r.jobs.map(j=>`<div class="applicant-row">
+      <div class="applicant-info">
+        <div class="applicant-name">${j.title}</div>
+        <div class="applicant-headline">${j.company||""} · ${j.location||""} · ${j.job_type}</div>
+      </div>
+      <button class="btn btn-sm btn-outline" onclick="viewApplicants(${j.id},'${j.title}')">View applicants</button>
+    </div>`).join("");
+  }catch(e){c.innerHTML='<div class="empty-state">Error loading jobs.</div>';}
+}
+
+async function viewApplicants(jid,title){
+  try{
+    const r=await API.get("/recruiter/jobs/"+jid+"/applicants");
+    const c=document.getElementById("myJobs");
+    c.innerHTML=`<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+      <button class="btn btn-outline btn-sm" onclick="loadMyJobs()">← Back</button>
+      <h3 style="font-weight:600">Applicants for: ${title}</h3>
+    </div>`+(r.applicants.length?r.applicants.map(a=>`<div class="applicant-row">
+      <div class="person-avatar-lg" style="width:40px;height:40px;font-size:1rem">${a.user.full_name[0]}</div>
+      <div class="applicant-info">
+        <div class="applicant-name">${a.user.full_name}</div>
+        <div class="applicant-headline">${a.user.headline||""}</div>
+        <div class="applicant-skills">${(a.skills||[]).slice(0,5).map(s=>`<span class="skill-chip">${s.skill_name}</span>`).join("")}</div>
+      </div>
+      <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px">
+        <span class="tag ${a.status==="offer"?"tag-green":a.status==="rejected"?"tag-red":"tag-blue"}">${a.status}</span>
+        <select onchange="updateStatus(${a.application_id},this.value)" style="font-size:.78rem;padding:4px 8px;background:var(--bg3);border:1px solid var(--border);color:var(--text);border-radius:6px">
+          <option value="">Move to…</option>
+          <option value="screening">Screening</option>
+          <option value="interview">Interview</option>
+          <option value="offer">Offer</option>
+          <option value="rejected">Rejected</option>
+        </select>
+      </div>
+    </div>`).join(""):'<div class="empty-state">No applicants yet.</div>');
+  }catch(e){alert(e.message);}
+}
+
+async function updateStatus(aid,status){
+  if(!status) return;
+  try{await API.patch("/recruiter/applicants/"+aid,{status});alert("Status updated to: "+status);}
+  catch(e){alert(e.message);}
+}
+
+async function searchCandidates(){
+  const skill=document.getElementById("cSkill").value.trim();
+  const loc=document.getElementById("cLoc").value.trim();
+  const c=document.getElementById("candidates");
+  c.innerHTML='<div class="empty-state">Searching…</div>';
+  try{
+    const p=new URLSearchParams();
+    if(skill)p.set("skill",skill);if(loc)p.set("location",loc);
+    const r=await API.get("/recruiter/candidates?"+p);
+    if(!r.candidates.length){c.innerHTML='<div class="empty-state">No candidates found.</div>';return;}
+    c.innerHTML=r.candidates.map(u=>`<div class="candidate-card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+        <div class="person-avatar-lg" style="width:38px;height:38px;font-size:1rem">${u.avatar}</div>
+        <div><div class="candidate-name">${u.full_name}</div><div class="candidate-headline">${u.headline||""}</div></div>
+        <a href="/messages?user=${u.id}" class="btn btn-sm btn-outline" style="margin-left:auto">Message</a>
+      </div>
+      <div>${(u.skills||[]).map(s=>`<span class="skill-chip">${s.skill_name}</span>`).join("")}</div>
+    </div>`).join("");
+  }catch(e){c.innerHTML='<div class="empty-state">Error: '+e.message+'</div>';}
+}
+</script>
+{% endblock %}

@@ -1,0 +1,63 @@
+{% extends "base.html" %}
+{% block title %}Notifications — CareerIQ{% endblock %}
+{% block page_title %}Notifications{% endblock %}
+{% block content %}
+<div style="max-width:640px;margin:0 auto">
+  <div class="card" style="padding:0;overflow:hidden">
+    <div class="notif-header" style="padding:16px 20px">
+      <h2 class="card-title" style="margin-bottom:0">All notifications</h2>
+      <button class="btn btn-sm btn-outline" onclick="markAll()">Mark all read</button>
+    </div>
+    <div id="notifFeed"><div class="empty-state" style="padding:40px">Loading…</div></div>
+    <div id="loadMoreWrap" style="text-align:center;padding:16px;display:none">
+      <button class="btn btn-outline btn-sm" onclick="loadMore()">Load more</button>
+    </div>
+  </div>
+</div>
+<script>
+let page = 1;
+(async () => {
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='notifications']")?.classList.add("active");
+  await load(1, true);
+})();
+
+async function load(p, replace) {
+  const c = document.getElementById("notifFeed");
+  if (replace) c.innerHTML = '<div class="empty-state" style="padding:40px">Loading…</div>';
+  try {
+    const r = await API.get("/notifications/?page=" + p);
+    if (replace) c.innerHTML = "";
+    if (!r.notifications.length && replace) {
+      c.innerHTML = '<div class="empty-state" style="padding:40px">No notifications yet.<br>Like a post or connect with someone!</div>';
+      return;
+    }
+    r.notifications.forEach(n => {
+      const el = document.createElement("div");
+      el.innerHTML = `<div class="notif-item ${n.is_read?'':'unread'}" onclick="handleNotif(${n.id},'${n.link||''}')">
+        <div class="notif-avatar">${n.actor_avatar}</div>
+        <div class="notif-body">
+          <div class="notif-title">${escHtml(n.title)}</div>
+          <div class="notif-sub">${escHtml(n.body||"")}</div>
+          <div class="notif-time">${timeAgo(n.created_at)}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-dot"></div>'}
+      </div>`;
+      c.appendChild(el.firstElementChild);
+    });
+    document.getElementById("loadMoreWrap").style.display = r.has_next ? "block" : "none";
+    page = p;
+    if (typeof updateNotifCount === "function") updateNotifCount(r.unread_count);
+  } catch(e) { if(replace) c.innerHTML='<div class="empty-state" style="padding:40px">Error loading.</div>'; }
+}
+async function handleNotif(nid, link) {
+  await API.post("/notifications/mark-read", {notification_id: nid});
+  if (link) window.location.href = link;
+}
+async function markAll() {
+  await API.post("/notifications/mark-read", {});
+  await load(1, true);
+}
+function loadMore() { load(page + 1, false); }
+</script>
+{% endblock %}

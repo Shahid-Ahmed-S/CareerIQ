@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Messages — CareerIQ{% endblock %}
+{% block page_title %}Messages{% endblock %}
+{% block content %}
+<script>
+window.addEventListener("DOMContentLoaded",()=>{
+  window.location.href="/messages#open-{{ other_id }}";
+});
+</script>
+<script>
+const otherId={{ other_id }};
+(async()=>{
+  requireAuth();
+  const r=await API.get("/profile/public/"+otherId);
+  window.location.href="/messages";
+})();
+</script>
+{% endblock %}

@@ -1,0 +1,53 @@
+{% extends "base.html" %}
+{% block title %}Saved Jobs — CareerIQ{% endblock %}
+{% block page_title %}Saved Jobs{% endblock %}
+{% block content %}
+<div class="jobs-layout">
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+    <p style="color:var(--text2);font-size:.9rem">Jobs you've bookmarked.</p>
+    <span id="savedCount" class="count-badge">0 saved</span>
+  </div>
+  <div id="savedGrid" class="jobs-grid"><div class="empty-state">Loading…</div></div>
+</div>
+<script>
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='saved-jobs']")?.classList.add("active");
+  await Currency.init();
+  const r=await API.get("/saved-jobs/");
+  const saved=r.saved_jobs;
+  document.getElementById("savedCount").textContent=saved.length+" saved";
+  const g=document.getElementById("savedGrid");
+  if(!saved.length){g.innerHTML='<div class="empty-state">No saved jobs. Browse jobs and click the bookmark icon.</div>';return;}
+  g.innerHTML=saved.map(item=>{
+    const j=item.job;
+    const sal=j.salary_min?`<div class="job-salary">${Currency.format(j.salary_min,j.salary_max)}</div>`:"";
+    const sk=(j.skills||[]).slice(0,4).map(s=>`<span class="skill-chip">${s.skill_name}</span>`).join("");
+    return `<div class="job-card">
+      <div class="job-card-header">
+        <div class="job-company-logo">${(j.company||"?")[0]}</div>
+        <div style="flex:1"><div class="job-title">${j.title}</div><div class="job-company">${j.company||"Unknown"}</div></div>
+        <button class="btn-icon" onclick="unsave(${j.id},this)" title="Remove">
+          <svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" fill="var(--accent)" stroke="var(--accent)"/></svg>
+        </button>
+      </div>
+      <div class="job-meta">
+        <span class="tag tag-blue">${j.location||"Remote"}</span>
+        <span class="tag tag-purple">${j.job_type||"—"}</span>
+        <span class="tag tag-green">${j.experience_level||"—"}</span>
+      </div>
+      ${sal}<div class="job-skills-preview">${sk}</div>
+      <div style="margin-top:10px;display:flex;gap:8px;align-items:center">
+        <button class="btn btn-primary btn-sm" onclick="trackApply(${j.id},this)">Track application</button>
+        <span style="font-size:.75rem;color:var(--text3)">Saved ${new Date(item.saved_at).toLocaleDateString()}</span>
+      </div>
+    </div>`;
+  }).join("");
+})();
+async function unsave(jid,btn){try{await API.delete("/saved-jobs/"+jid);location.reload();}catch(e){alert(e.message);}}
+async function trackApply(jid,btn){
+  try{await API.post("/applications/",{job_id:jid});btn.textContent="✓ Tracked";btn.disabled=true;btn.style.background="var(--green)";}
+  catch(e){if(e.message.includes("Already")){btn.textContent="✓ Tracked";btn.disabled=true;}else alert(e.message);}
+}
+</script>
+{% endblock %}

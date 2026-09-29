@@ -1,0 +1,487 @@
+{% extends "base.html" %}
+{% block title %}Feed — CareerIQ{% endblock %}
+{% block page_title %}Feed{% endblock %}
+
+{% block extra_head %}
+<style>
+.media-preview-wrap{position:relative;margin:12px 0;border-radius:var(--radius);overflow:hidden;background:var(--bg3)}
+.media-preview-wrap img,.media-preview-wrap video{width:100%;max-height:400px;object-fit:cover;display:block;border-radius:var(--radius)}
+.media-remove-btn{position:absolute;top:8px;right:8px;background:rgba(0,0,0,.6);color:#fff;border:none;border-radius:50%;width:28px;height:28px;cursor:pointer;font-size:1rem;display:grid;place-items:center}
+.post-media{border-radius:var(--radius);overflow:hidden;margin:10px 0;background:var(--bg3)}
+.post-media img{width:100%;max-height:500px;object-fit:cover;display:block;cursor:pointer}
+.post-media video{width:100%;max-height:500px;display:block;border-radius:var(--radius)}
+.media-upload-bar{display:flex;gap:12px;padding:10px 0;border-top:1px solid var(--border);margin-top:10px}
+.media-upload-btn{display:flex;align-items:center;gap:6px;background:none;border:none;color:var(--text2);cursor:pointer;font-size:.85rem;padding:6px 10px;border-radius:8px;transition:background var(--tr)}
+.media-upload-btn:hover{background:var(--bg3);color:var(--text)}
+.media-upload-btn svg{width:18px;height:18px}
+.upload-progress{height:3px;background:var(--border);border-radius:2px;margin-top:8px;overflow:hidden;display:none}
+.upload-progress-bar{height:100%;background:var(--accent);border-radius:2px;width:0;transition:width .3s}
+
+/* Lightbox */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:999;display:none;align-items:center;justify-content:center}
+.lightbox img{max-width:90vw;max-height:90vh;object-fit:contain;border-radius:8px}
+.lightbox-close{position:absolute;top:20px;right:24px;color:#fff;font-size:2rem;cursor:pointer;background:none;border:none;line-height:1}
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="feed-layout">
+
+  <!-- Compose box -->
+  <div class="card compose-card">
+    <div class="compose-top">
+      <div class="compose-avatar" id="composeAvatar">?</div>
+      <div class="compose-trigger" id="openCompose">Share a post, photo, or video…</div>
+    </div>
+    <div class="compose-actions">
+      <button class="compose-type-btn active" onclick="setType('post',this)">📝 Post</button>
+      <button class="compose-type-btn" onclick="setType('achievement',this)">🏆 Achievement</button>
+      <button class="compose-type-btn" onclick="setType('milestone',this)">🎯 Milestone</button>
+      <button class="compose-type-btn" onclick="setType('certification',this)">📜 Certification</button>
+      <button class="compose-type-btn" onclick="setType('job_update',this)">💼 Job Update</button>
+      <button class="compose-type-btn" onclick="setType('project',this)">🚀 Project</button>
+    </div>
+  </div>
+
+  <!-- Compose modal -->
+  <div class="modal-overlay" id="composeModal" style="display:none">
+    <div class="modal modal--compose">
+      <button class="modal-close" onclick="closeCompose()">✕</button>
+      <h3 class="modal-title" id="composeTitle">Create a post</h3>
+
+      <div id="achFields" style="display:none;margin-bottom:14px">
+        <div class="field"><label>Title</label><input type="text" id="achTitle" placeholder="e.g. Promoted to Senior Engineer"/></div>
+        <div class="achievement-icons">
+          <span class="icon-pick active" onclick="pickIcon('🏆',this)">🏆</span>
+          <span class="icon-pick" onclick="pickIcon('🎉',this)">🎉</span>
+          <span class="icon-pick" onclick="pickIcon('🥇',this)">🥇</span>
+          <span class="icon-pick" onclick="pickIcon('🎯',this)">🎯</span>
+          <span class="icon-pick" onclick="pickIcon('📜',this)">📜</span>
+          <span class="icon-pick" onclick="pickIcon('💼',this)">💼</span>
+          <span class="icon-pick" onclick="pickIcon('🚀',this)">🚀</span>
+          <span class="icon-pick" onclick="pickIcon('⭐',this)">⭐</span>
+          <span class="icon-pick" onclick="pickIcon('🔥',this)">🔥</span>
+          <span class="icon-pick" onclick="pickIcon('💡',this)">💡</span>
+        </div>
+      </div>
+
+      <div class="field">
+        <label id="contentLabel">What would you like to share?</label>
+        <textarea id="postContent" rows="4" maxlength="3000" placeholder="Share with your network…"></textarea>
+        <div class="char-count"><span id="charCount">0</span>/3000</div>
+      </div>
+
+      <!-- Media preview -->
+      <div id="mediaPreviewWrap" class="media-preview-wrap" style="display:none">
+        <img id="mediaPreviewImg" src="" alt="" style="display:none"/>
+        <video id="mediaPreviewVid" controls style="display:none"></video>
+        <button class="media-remove-btn" onclick="removeMedia()" title="Remove">✕</button>
+      </div>
+
+      <!-- Upload progress -->
+      <div class="upload-progress" id="uploadProgress">
+        <div class="upload-progress-bar" id="uploadProgressBar"></div>
+      </div>
+
+      <!-- Media upload bar -->
+      <div class="media-upload-bar">
+        <button class="media-upload-btn" onclick="document.getElementById('photoInput').click()">
+          <svg viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+          Photo
+        </button>
+        <button class="media-upload-btn" onclick="document.getElementById('videoInput').click()">
+          <svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>
+          Video
+        </button>
+        <input type="file" id="photoInput" accept="image/*" style="display:none" onchange="handleMedia(this,'image')"/>
+        <input type="file" id="videoInput" accept="video/*" style="display:none" onchange="handleMedia(this,'video')"/>
+      </div>
+
+      <div id="postAlert" class="alert" style="display:none"></div>
+      <button class="btn btn-primary btn-full" id="submitPost">
+        <span id="postLbl">Post</span>
+        <span class="btn-spinner" id="postSp" style="display:none"></span>
+      </button>
+    </div>
+  </div>
+
+  <!-- Lightbox for full-size image -->
+  <div class="lightbox" id="lightbox" onclick="closeLightbox()">
+    <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+    <img id="lightboxImg" src="" alt=""/>
+  </div>
+
+  <!-- Feed filters -->
+  <div class="feed-filters">
+    <button class="feed-filter-btn active" onclick="filterFeed('',this)">All</button>
+    <button class="feed-filter-btn" onclick="filterFeed('achievement',this)">🏆 Achievements</button>
+    <button class="feed-filter-btn" onclick="filterFeed('milestone',this)">🎯 Milestones</button>
+    <button class="feed-filter-btn" onclick="filterFeed('certification',this)">📜 Certs</button>
+    <button class="feed-filter-btn" onclick="filterFeed('job_update',this)">💼 Job Updates</button>
+    <button class="feed-filter-btn" onclick="filterFeed('project',this)">🚀 Projects</button>
+  </div>
+
+  <!-- Posts -->
+  <div id="feedPosts"><div class="empty-state">Loading feed…</div></div>
+  <div id="loadMoreWrap" style="text-align:center;display:none;margin:8px 0">
+    <button class="btn btn-outline" onclick="loadMore()">Load more</button>
+  </div>
+  <div class="scroll-sentinel" id="scrollSentinel"></div>
+
+</div>
+
+<script>
+let cType = "post", cIcon = "🏆", cPage = 1, cFilter = "";
+let pendingMediaUrl = null, pendingMediaType = null;
+
+const TLABELS = {post:"Create a post",achievement:"Share an achievement",milestone:"Share a milestone",certification:"Share a certification",job_update:"Share a job update",project:"Share a project"};
+const TPLACE  = {post:"Share your thoughts…",achievement:"Tell your network about this achievement…",milestone:"Describe this milestone…",certification:"Share this certification…",job_update:"Share your career update…",project:"Tell your network about this project…"};
+
+(async () => {
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='feed']")?.classList.add("active");
+  const u = API.getUser() || {};
+  const ca = document.getElementById("composeAvatar");
+  if (ca) ca.textContent = (u.full_name || "?")[0].toUpperCase();
+  await loadFeed(1, true);
+
+  // Infinite scroll
+  setupInfiniteScroll(document.getElementById("scrollSentinel"), () => {
+    const lm = document.getElementById("loadMoreWrap");
+    if (lm && lm.style.display !== "none") loadMore();
+  });
+})();
+
+document.getElementById("openCompose").addEventListener("click", () => {
+  document.getElementById("composeModal").style.display = "flex";
+});
+document.getElementById("postContent").addEventListener("input", function() {
+  document.getElementById("charCount").textContent = this.value.length;
+});
+
+function closeCompose() {
+  document.getElementById("composeModal").style.display = "none";
+}
+
+function setType(t, btn) {
+  cType = t;
+  document.querySelectorAll(".compose-type-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("composeTitle").textContent = TLABELS[t] || "Create a post";
+  document.getElementById("postContent").placeholder = TPLACE[t] || "";
+  const show = ["achievement","milestone","certification","job_update","project"].includes(t);
+  document.getElementById("achFields").style.display = show ? "block" : "none";
+}
+
+function pickIcon(icon, el) {
+  cIcon = icon;
+  document.querySelectorAll(".icon-pick").forEach(e => e.classList.remove("active"));
+  el.classList.add("active");
+}
+
+function filterFeed(t, btn) {
+  cFilter = t; cPage = 1;
+  document.querySelectorAll(".feed-filter-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  loadFeed(1, true);
+}
+
+// ── Media upload ──────────────────────────────────────────────
+async function handleMedia(input, type) {
+  const file = input.files[0];
+  if (!file) return;
+
+  const maxSize = type === "video" ? 100 * 1024 * 1024 : 10 * 1024 * 1024;
+  if (file.size > maxSize) {
+    alert(type === "video" ? "Video must be under 100MB." : "Image must be under 10MB.");
+    input.value = ""; return;
+  }
+
+  const progress   = document.getElementById("uploadProgress");
+  const progressBar= document.getElementById("uploadProgressBar");
+  const preview    = document.getElementById("mediaPreviewWrap");
+  progress.style.display = "block";
+  progressBar.style.width = "30%";
+
+  // Show local preview immediately
+  const localUrl = URL.createObjectURL(file);
+  if (type === "image") {
+    document.getElementById("mediaPreviewImg").src = localUrl;
+    document.getElementById("mediaPreviewImg").style.display = "block";
+    document.getElementById("mediaPreviewVid").style.display = "none";
+  } else {
+    document.getElementById("mediaPreviewVid").src = localUrl;
+    document.getElementById("mediaPreviewVid").style.display = "block";
+    document.getElementById("mediaPreviewImg").style.display = "none";
+  }
+  preview.style.display = "block";
+  progressBar.style.width = "60%";
+
+  // Upload to server
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+    const token = sessionStorage.getItem("access_token") || localStorage.getItem("access_token");
+    const res = await fetch("/api/feed/upload-media", {
+      method: "POST",
+      headers: { "Authorization": "Bearer " + token },
+      body: formData,
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || "Upload failed");
+    pendingMediaUrl  = data.media_url;
+    pendingMediaType = data.media_type;
+    progressBar.style.width = "100%";
+    setTimeout(() => { progress.style.display = "none"; progressBar.style.width = "0"; }, 600);
+  } catch(e) {
+    alert(e.message);
+    removeMedia();
+    progress.style.display = "none";
+  }
+  input.value = "";
+}
+
+function removeMedia() {
+  pendingMediaUrl = null; pendingMediaType = null;
+  document.getElementById("mediaPreviewWrap").style.display = "none";
+  document.getElementById("mediaPreviewImg").src = "";
+  document.getElementById("mediaPreviewVid").src = "";
+}
+
+// ── Feed loading ──────────────────────────────────────────────
+async function loadFeed(page, replace) {
+  const c = document.getElementById("feedPosts");
+  if (replace) c.innerHTML = '<div class="empty-state">Loading…</div>';
+  try {
+    const p = new URLSearchParams({ page, per_page: 15 });
+    if (cFilter) p.set("type", cFilter);
+    const r = await API.get("/feed/?" + p);
+    if (replace) c.innerHTML = "";
+    if (!r.posts.length && replace) {
+      c.innerHTML = '<div class="empty-state">No posts yet. Be the first to share something!</div>';
+      document.getElementById("loadMoreWrap").style.display = "none";
+      return;
+    }
+    r.posts.forEach(post => {
+      const el = document.createElement("div");
+      el.innerHTML = renderPost(post);
+      c.appendChild(el.firstElementChild);
+    });
+    document.getElementById("loadMoreWrap").style.display = r.has_next ? "block" : "none";
+    cPage = page;
+  } catch(e) {
+    if (replace) c.innerHTML = '<div class="empty-state">Error: ' + e.message + '</div>';
+  }
+}
+
+function loadMore() { loadFeed(cPage + 1, false); }
+
+// ── Render post ───────────────────────────────────────────────
+function renderPost(p) {
+  const tag = p.post_type !== "post"
+    ? `<span class="post-type-tag pt-${p.post_type}">${getTypeLabel(p.post_type)}</span>` : "";
+  const ach = p.achievement_title
+    ? `<div class="achievement-banner"><span class="ach-icon">${p.achievement_icon || "🏆"}</span><span class="ach-title">${escHtml(p.achievement_title)}</span></div>` : "";
+  const del = p.is_own ? `
+    <div style="display:flex;gap:6px">
+      <button class="post-edit-btn" onclick="editPost(${p.id},this)">Edit</button>
+      <button class="post-delete-btn" onclick="delPost(${p.id})">✕</button>
+    </div>` : "";
+
+  // Media block
+  let media = "";
+  if (p.media_url && p.media_type === "image") {
+    media = `<div class="post-media"><img src="${p.media_url}" alt="Post image" loading="lazy" onclick="openLightbox('${p.media_url}')"/></div>`;
+  } else if (p.media_url && p.media_type === "video") {
+    media = `<div class="post-media"><video controls preload="metadata" src="${p.media_url}"></video></div>`;
+  }
+
+  const liked = p.is_liked ? "post-action-btn liked" : "post-action-btn";
+
+  return `<div class="post-card" id="post-${p.id}">
+    <div class="post-header">
+      <div class="post-avatar" style="overflow:hidden;padding:0">
+        ${p.author_avatar_url
+          ? `<img src="${p.author_avatar_url}" style="width:42px;height:42px;object-fit:cover;border-radius:50%" alt="avatar"/>`
+          : p.author_avatar}
+      </div>
+      <div class="post-author-info">
+        <div class="post-author-name">${escHtml(p.author_name)}${tag}</div>
+        <div class="post-author-meta">${escHtml(p.author_headline || "")} · ${timeAgo(p.created_at)}</div>
+      </div>${del}
+    </div>
+    ${ach}
+    ${p.content ? `<div class="post-content">${escHtml(p.content)}</div>` : ""}
+    ${media}
+    <div class="post-stats">
+      ${p.like_count ? `<span>${p.like_count} like${p.like_count > 1 ? "s" : ""}</span>` : ""}
+      ${p.comment_count ? `<span>${p.comment_count} comment${p.comment_count > 1 ? "s" : ""}</span>` : ""}
+    </div>
+    <div class="post-actions">
+      <button class="${liked}" id="like-${p.id}" onclick="toggleLike(${p.id},this)">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M14 9V5a3 3 0 00-3-3l-4 9v11h11.28a2 2 0 002-1.7l1.38-9a2 2 0 00-2-2.3H14z"/><path d="M7 22H4a2 2 0 01-2-2v-7a2 2 0 012-2h3"/></svg>
+        <span id="lc-${p.id}">${p.like_count || 0}</span> Like
+      </button>
+      <button class="post-action-btn" onclick="toggleComments(${p.id})">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>
+        Comment
+      </button>
+      <button class="post-action-btn" onclick="doRepost(${p.id})">
+        <svg viewBox="0 0 24 24" style="width:16px;height:16px"><polyline points="17 1 21 5 17 9"/><path d="M3 11V9a4 4 0 014-4h14"/><polyline points="7 23 3 19 7 15"/><path d="M21 13v2a4 4 0 01-4 4H3"/></svg>
+        Repost
+      </button>
+    </div>
+    <div class="comments-section" id="cs-${p.id}" style="display:none">
+      <div class="comments-list" id="cl-${p.id}">
+        ${p.comments.map(c => renderComment(c)).join("")}
+      </div>
+      <div class="comment-input-row">
+        <div class="comment-avatar" id="ca-${p.id}">?</div>
+        <input class="comment-input" id="ci-${p.id}" placeholder="Write a comment…"
+               onkeydown="if(event.key==='Enter')submitComment(${p.id})"/>
+        <button class="btn btn-sm btn-primary" onclick="submitComment(${p.id})">Post</button>
+      </div>
+    </div>
+  </div>`;
+}
+
+function renderComment(c) {
+  return `<div class="comment-item">
+    <div class="comment-avatar">${c.author_avatar}</div>
+    <div class="comment-body">
+      <span class="comment-author">${escHtml(c.author_name)}</span>
+      <span class="comment-text"> ${escHtml(c.content)}</span>
+      <span class="comment-time">${timeAgo(c.created_at)}</span>
+    </div>
+  </div>`;
+}
+
+// ── Interactions ──────────────────────────────────────────────
+async function toggleLike(pid, btn) {
+  try {
+    const r = await API.post("/feed/" + pid + "/like");
+    document.getElementById("lc-" + pid).textContent = r.like_count;
+    btn.classList.toggle("liked", r.liked);
+  } catch(e) { console.error(e); }
+}
+
+function toggleComments(pid) {
+  const s = document.getElementById("cs-" + pid);
+  const show = s.style.display === "none";
+  s.style.display = show ? "block" : "none";
+  if (show) {
+    const u = API.getUser() || {};
+    const ca = document.getElementById("ca-" + pid);
+    if (ca) ca.textContent = (u.full_name || "?")[0].toUpperCase();
+    loadComments(pid);
+  }
+}
+
+async function loadComments(pid) {
+  try {
+    const r = await API.get("/feed/" + pid + "/comments");
+    const l = document.getElementById("cl-" + pid);
+    if (l) l.innerHTML = r.comments.length
+      ? r.comments.map(renderComment).join("")
+      : '<div style="color:var(--text3);font-size:.82rem;padding:8px 0">No comments yet.</div>';
+  } catch(e) { console.error(e); }
+}
+
+async function submitComment(pid) {
+  const inp = document.getElementById("ci-" + pid);
+  const txt = inp.value.trim();
+  if (!txt) return;
+  try {
+    const r = await API.post("/feed/" + pid + "/comments", { content: txt });
+    inp.value = "";
+    const l = document.getElementById("cl-" + pid);
+    if (l) l.innerHTML += renderComment(r.comment);
+  } catch(e) { alert(e.message); }
+}
+
+async function delPost(pid) {
+  if (!confirm("Delete this post?")) return;
+  try {
+    await API.delete("/feed/" + pid);
+    const c = document.getElementById("post-" + pid);
+    if (c) { c.style.opacity = "0"; c.style.transition = "opacity .3s"; setTimeout(() => c.remove(), 300); }
+  } catch(e) { alert(e.message); }
+}
+
+// ── Submit post ───────────────────────────────────────────────
+document.getElementById("submitPost").addEventListener("click", async () => {
+  const txt   = document.getElementById("postContent").value.trim();
+  const alert = document.getElementById("postAlert");
+  const lbl   = document.getElementById("postLbl");
+  const sp    = document.getElementById("postSp");
+  const btn   = document.getElementById("submitPost");
+
+  if (!txt && !pendingMediaUrl) {
+    showAlert(alert, "Please write something or attach a photo/video.", "error");
+    return;
+  }
+
+  lbl.style.display = "none"; sp.style.display = "inline-block"; btn.disabled = true;
+
+  try {
+    await API.post("/feed/", {
+      content:           txt,
+      post_type:         cType,
+      achievement_title: document.getElementById("achTitle").value.trim(),
+      achievement_icon:  cIcon,
+      media_url:         pendingMediaUrl,
+      media_type:        pendingMediaType,
+    });
+
+    // Reset compose
+    document.getElementById("composeModal").style.display = "none";
+    document.getElementById("postContent").value = "";
+    document.getElementById("achTitle").value = "";
+    document.getElementById("charCount").textContent = "0";
+    removeMedia();
+    cPage = 1;
+    await loadFeed(1, true);
+  } catch(e) {
+    showAlert(alert, e.message, "error");
+  } finally {
+    lbl.style.display = "inline"; sp.style.display = "none"; btn.disabled = false;
+  }
+});
+
+// ── Lightbox ──────────────────────────────────────────────────
+function openLightbox(src) {
+  document.getElementById("lightboxImg").src = src;
+  document.getElementById("lightbox").style.display = "flex";
+}
+function closeLightbox() {
+  document.getElementById("lightbox").style.display = "none";
+}
+document.addEventListener("keydown", e => { if (e.key === "Escape") closeLightbox(); });
+
+async function editPost(pid, btn) {
+  const card = document.getElementById("post-" + pid);
+  const contentEl = card?.querySelector(".post-content");
+  if (!contentEl) return;
+  const current = contentEl.textContent;
+  const newText = prompt("Edit your post:", current);
+  if (!newText || newText.trim() === current.trim()) return;
+  try {
+    const r = await API.patch("/feed/" + pid, { content: newText.trim() });
+    contentEl.textContent = newText.trim();
+  } catch(e) { alert(e.message); }
+}
+
+async function doRepost(pid) {
+  const comment = prompt("Add a comment (optional):", "");
+  if (comment === null) return; // cancelled
+  try {
+    await API.post("/feed/" + pid + "/repost", { comment: comment.trim() });
+    cPage = 1; await loadFeed(1, true);
+  } catch(e) { alert(e.message); }
+}
+
+function getTypeLabel(t) {
+  return {achievement:"🏆 Achievement",milestone:"🎯 Milestone",certification:"📜 Cert",job_update:"💼 Job Update",project:"🚀 Project"}[t] || t;
+}
+</script>
+{% endblock %}

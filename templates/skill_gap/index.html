@@ -1,0 +1,110 @@
+{% extends "base.html" %}
+{% block title %}Skill Gap — CareerIQ{% endblock %}
+{% block page_title %}Skill Gap Analysis{% endblock %}
+{% block content %}
+<div class="gap-layout">
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Analyze your gap</h2></div>
+    <div class="analyzer-form">
+      <div class="field"><label>Target role</label><input type="text" id="roleInput" placeholder="e.g. Data Scientist, Backend Engineer"/></div>
+      <button class="btn btn-primary" id="analyzeBtn" onclick="runAnalysis()">
+        <span id="anlbl">Run analysis</span><span class="btn-spinner" id="ansp" style="display:none"></span>
+      </button>
+    </div>
+    <div id="anaAlert" class="alert" style="display:none"></div>
+  </div>
+
+  <div id="results" style="display:none">
+    <div class="card readiness-card">
+      <div><h2 class="card-title" id="resRole">—</h2><p style="font-size:.85rem;color:var(--text2)">Your readiness for this role</p></div>
+      <div class="readiness-ring-wrap">
+        <svg class="readiness-ring" viewBox="0 0 120 120">
+          <circle cx="60" cy="60" r="50" fill="none" stroke="var(--border)" stroke-width="8"/>
+          <circle id="resArc" cx="60" cy="60" r="50" fill="none" stroke="var(--accent)" stroke-width="8" stroke-linecap="round" stroke-dasharray="314" stroke-dashoffset="314" transform="rotate(-90 60 60)" style="transition:stroke-dashoffset 1s ease"/>
+        </svg>
+        <div class="readiness-pct" id="resPct">0%</div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Skill gap breakdown</h2></div>
+      <div class="gap-table-head"><span>Skill</span><span>Your level</span><span>Required</span><span>Status</span></div>
+      <div id="gapTable"></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Learning path</h2></div>
+      <div id="lpPath" class="learning-path"></div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Past analyses</h2></div>
+    <div id="pastReports" class="past-reports"><div class="empty-state">Loading…</div></div>
+  </div>
+</div>
+<script>
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='skill-gap']")?.classList.add("active");
+  await loadPast();
+})();
+async function runAnalysis(){
+  const role=document.getElementById("roleInput").value.trim();
+  const alert=document.getElementById("anaAlert"),lbl=document.getElementById("anlbl"),sp=document.getElementById("ansp"),btn=document.getElementById("analyzeBtn");
+  if(!role){showAlert(alert,"Please enter a target role.","error");return;}
+  lbl.style.display="none";sp.style.display="inline-block";btn.disabled=true;alert.style.display="none";
+  try{
+    const r=await API.post("/skill-gap/analyze",{target_role:role});
+    renderResults(r); showAlert(alert,"Analysis complete!","success");
+    await loadPast();
+  }catch(e){showAlert(alert,e.message,"error");}
+  finally{lbl.style.display="inline";sp.style.display="none";btn.disabled=false;}
+}
+function renderResults(r){
+  document.getElementById("results").style.display="block";
+  document.getElementById("resRole").textContent=r.target_role;
+  const pct=r.readiness_pct;
+  document.getElementById("resPct").textContent=pct+"%";
+  const arc=document.getElementById("resArc");
+  setTimeout(()=>arc.style.strokeDashoffset=314-(pct/100)*314,100);
+  arc.style.stroke=pct>=70?"var(--green)":pct>=40?"var(--amber)":"var(--red)";
+  document.getElementById("gapTable").innerHTML=r.gap_details.map(g=>`
+    <div class="gap-table-row ${g.gap===0?"gap-ok":"gap-missing"}">
+      <span class="gap-skill">${g.skill}</span>
+      <span class="gap-user">${g.user_label}</span>
+      <span class="gap-req">${g.required_label}</span>
+      <span class="${g.gap===0?"priority-ok":"priority-gap"}">${g.gap===0?"✓ Met":"Gap: "+g.gap+" lvl"}</span>
+    </div>`).join("");
+  const lp=document.getElementById("lpPath");
+  if(!r.learning_path.length){lp.innerHTML='<div class="empty-state">🎉 No gaps! You\'re ready.</div>';return;}
+  lp.innerHTML=r.learning_path.map(s=>`<div class="lp-step">
+    <div class="lp-number">${s.step}</div>
+    <div><div class="lp-skill">${s.skill}</div>
+    <div class="lp-detail">${s.reason}</div>
+    <a href="${s.resource_url}" target="_blank" class="lp-link">Start learning →</a></div>
+  </div>`).join("");
+}
+async function loadPast(){
+  const c=document.getElementById("pastReports");
+  try{
+    const r=await API.get("/skill-gap/reports");
+    if(!r.reports.length){c.innerHTML='<div class="empty-state">No analyses yet.</div>';return;}
+    c.innerHTML=r.reports.map(rp=>`<div class="report-row" onclick="loadReport(${rp.id})">
+      <div class="report-role">${rp.target_role}</div>
+      <div style="display:flex;align-items:center;gap:10px;font-size:.82rem;color:var(--text2)">
+        <div class="mini-bar"><div class="mini-fill" style="width:${Math.round((1-rp.overall_gap_score)*100)}%"></div></div>
+        <span>${Math.round((1-rp.overall_gap_score)*100)}% ready</span>
+      </div>
+      <div style="font-size:.78rem;color:var(--text3)">${new Date(rp.created_at).toLocaleDateString()}</div>
+    </div>`).join("");
+  }catch{}
+}
+async function loadReport(rid){
+  try{
+    const r=await API.get("/skill-gap/reports/"+rid);
+    const rp=r.report;
+    document.getElementById("roleInput").value=rp.target_role;
+    renderResults({target_role:rp.target_role,readiness_pct:Math.round((1-rp.overall_gap_score)*100),gap_details:rp.gap_details,learning_path:rp.learning_path});
+  }catch(e){alert(e.message);}
+}
+</script>
+{% endblock %}

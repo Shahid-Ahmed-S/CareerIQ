@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% block title %}Profile — CareerIQ{% endblock %}
+{% block page_title %}Profile{% endblock %}
+{% block content %}
+<div style="max-width:680px;margin:0 auto">
+  <div class="card" id="profileCard">
+    <div style="display:flex;gap:20px;align-items:flex-start">
+      <div id="pubAvatarWrap">
+        <div class="person-avatar-lg" id="pubAvatar">?</div>
+      </div>
+      <div style="flex:1">
+        <h2 style="font-family:var(--font-head);font-size:1.4rem;font-weight:800" id="pubName">Loading…</h2>
+        <div style="color:var(--text2);margin:4px 0" id="pubHeadline"></div>
+        <div style="font-size:.82rem;color:var(--text3)" id="pubLocation"></div>
+        <div style="display:flex;gap:10px;margin-top:14px" id="pubActions"></div>
+      </div>
+    </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)" id="pubBio"></div>
+  </div>
+  <div class="card" id="pubSkillsCard" style="display:none">
+    <h3 class="card-title" style="margin-bottom:14px">Skills</h3>
+    <div id="pubSkills" style="display:flex;flex-wrap:wrap;gap:8px"></div>
+  </div>
+</div>
+<script>
+const LVL = {1:"Beginner",2:"Intermediate",3:"Advanced",4:"Expert"};
+(async () => {
+  requireAuth(); loadUserChip();
+  const uid = window.location.pathname.split("/u/")[1];
+  if (!uid) { window.location.href="/feed"; return; }
+  try {
+    const r = await API.get("/profile/public/" + uid);
+    const u = r.user, p = r.profile;
+
+    if (u.avatar_url) {
+      document.getElementById("pubAvatarWrap").innerHTML =
+        `<img src="${u.avatar_url}" class="avatar-img-lg" alt="avatar"/>`;
+    } else {
+      document.getElementById("pubAvatar").textContent = u.avatar;
+    }
+    document.getElementById("pubName").textContent     = u.full_name;
+    document.getElementById("pubHeadline").textContent = p.headline || "";
+    document.getElementById("pubLocation").textContent = p.location || "";
+    if (p.bio) document.getElementById("pubBio").innerHTML =
+      `<p style="color:var(--text2);line-height:1.7">${escHtml(p.bio)}</p>`;
+
+    // Connection status & message button
+    const me = API.getUser();
+    const actions = document.getElementById("pubActions");
+    if (me && me.id !== u.id) {
+      actions.innerHTML = `
+        <button class="btn btn-primary btn-sm" onclick="connect(${u.id},this)">Connect</button>
+        <a href="/messages?user=${u.id}" class="btn btn-outline btn-sm">Message</a>`;
+    }
+
+    if (r.skills.length) {
+      document.getElementById("pubSkillsCard").style.display = "block";
+      document.getElementById("pubSkills").innerHTML = r.skills.map(s =>
+        `<span class="skill-chip">${s.skill_name} <span style="font-size:.72rem;color:var(--text3)">${LVL[s.proficiency_level]||""}</span></span>`
+      ).join("");
+    }
+  } catch(e) {
+    document.getElementById("profileCard").innerHTML = `<div class="empty-state">Profile not found.</div>`;
+  }
+})();
+async function connect(uid, btn) {
+  try {
+    await API.post("/connections/request/" + uid);
+    btn.textContent = "Request sent"; btn.disabled = true;
+  } catch(e) { alert(e.message); }
+}
+</script>
+{% endblock %}

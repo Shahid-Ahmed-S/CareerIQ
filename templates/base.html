@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en" id="htmlRoot">
+<head>
+<meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<meta name="theme-color" content="#0f1117"/>
+<title>{% block title %}CareerIQ{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Sans:wght@300;400;500&display=swap" rel="stylesheet"/>
+<link rel="stylesheet" href="{{ url_for('static',filename='css/main.css') }}"/>
+<script src="{{ url_for('static',filename='js/api.js') }}"></script>
+<script src="{{ url_for('static',filename='js/app.js') }}"></script>
+<script src="{{ url_for('static',filename='js/currency.js') }}"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.7.2/socket.io.min.js"></script>
+{% block extra_head %}{% endblock %}
+</head>
+<body>
+{% block full_page %}
+<div class="app-shell">
+  <!-- Sidebar -->
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-logo">
+      <span class="logo-mark">C</span><span class="logo-text">CareerIQ</span>
+    </div>
+    <nav class="sidebar-nav">
+      <a href="/dashboard"    class="nav-item" data-page="dashboard">
+        <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 01-2 2H5a2 2 0 01-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>Dashboard
+      </a>
+      <a href="/feed"         class="nav-item" data-page="feed">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Feed
+      </a>
+      <a href="/connections"  class="nav-item" data-page="connections">
+        <svg viewBox="0 0 24 24"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87M16 3.13a4 4 0 010 7.75"/></svg>Network
+      </a>
+      <a href="/messages"     class="nav-item" data-page="messages" style="position:relative">
+        <svg viewBox="0 0 24 24"><path d="M21 15a2 2 0 01-2 2H7l-4 4V5a2 2 0 012-2h14a2 2 0 012 2z"/></svg>Messages
+        <span class="msg-badge" id="msgBadge" style="display:none">0</span>
+      </a>
+      <a href="/notifications" class="nav-item" data-page="notifications" style="position:relative">
+        <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>Notifications
+        <span class="notif-count" id="sideNotifCount" style="display:none;position:absolute;top:6px;right:14px"></span>
+      </a>
+      <a href="/profile"      class="nav-item" data-page="profile">
+        <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>My Profile
+      </a>
+      <a href="/jobs"         class="nav-item" data-page="jobs">
+        <svg viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 00-2-2h-4a2 2 0 00-2 2v2"/></svg>Jobs
+      </a>
+      <a href="/saved-jobs"   class="nav-item" data-page="saved-jobs">
+        <svg viewBox="0 0 24 24"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z"/></svg>Saved Jobs
+      </a>
+      <a href="/applications" class="nav-item" data-page="applications">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>Applications
+      </a>
+      <a href="/skill-gap"    class="nav-item" data-page="skill-gap">
+        <svg viewBox="0 0 24 24"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>Skill Gap
+      </a>
+      <a href="/recommendations" class="nav-item" data-page="recommendations">
+        <svg viewBox="0 0 24 24"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>For You
+      </a>
+      <a href="/recruiter"    class="nav-item" data-page="recruiter">
+        <svg viewBox="0 0 24 24"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>Recruiter
+      </a>
+    </nav>
+    <div class="sidebar-footer">
+      <button class="nav-item logout-btn" id="logoutBtn">
+        <svg viewBox="0 0 24 24"><path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>Sign out
+      </button>
+    </div>
+  </aside>
+
+  <!-- Main -->
+  <main class="main-content">
+    <header class="topbar">
+      <div class="topbar-left">
+        <button class="menu-toggle" id="menuToggle">
+          <svg viewBox="0 0 24 24"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <!-- Global Search -->
+        <div class="global-search-wrap" id="searchWrap">
+          <svg class="global-search-icon" viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+          <input class="global-search-input" id="globalSearch" placeholder="Search people, jobs…" autocomplete="off"/>
+          <div class="search-dropdown" id="searchDropdown"></div>
+        </div>
+      </div>
+      <div class="topbar-right" style="display:flex;align-items:center;gap:4px">
+        <!-- Theme toggle -->
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+        <!-- Notifications bell -->
+        <div style="position:relative">
+          <button class="notif-bell" id="notifBell" title="Notifications">
+            <svg viewBox="0 0 24 24"><path d="M18 8A6 6 0 006 8c0 7-3 9-3 9h18s-3-2-3-9M13.73 21a2 2 0 01-3.46 0"/></svg>
+            <span class="notif-count" id="notifCount"></span>
+          </button>
+          <div class="notif-dropdown" id="notifDropdown">
+            <div class="notif-header">
+              <h3>Notifications</h3>
+              <button class="link-sm" onclick="markAllRead()" style="background:none;border:none;cursor:pointer;color:var(--accent);font-size:.8rem">Mark all read</button>
+            </div>
+            <div id="notifList"><div class="empty-state" style="padding:24px">No notifications yet.</div></div>
+          </div>
+        </div>
+        <!-- User chip -->
+        <div class="user-chip" style="margin-left:4px">
+          <div id="userAvatarWrap">
+            <div class="avatar" id="userAvatar">?</div>
+          </div>
+          <span id="userName">Loading…</span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Verify banner -->
+    <div class="verify-banner" id="verifyBanner">
+      ⚠️ Please verify your email address.
+      <button class="banner-btn" id="resendVerifyBtn">Resend email</button>
+    </div>
+
+    <div class="page-body">{% block content %}{% endblock %}</div>
+  </main>
+</div>
+{% endblock %}
+
+{% block extra_js %}{% endblock %}
+
+<script>
+// ── Theme ──────────────────────────────────────────────────────
+(function(){
+  const saved = localStorage.getItem("theme") || "dark";
+  if(saved === "light") document.body.classList.add("light");
+  const btn = document.getElementById("themeToggle");
+  if(btn) btn.textContent = saved === "light" ? "🌙" : "☀️";
+})();
+
+document.getElementById("themeToggle")?.addEventListener("click", function(){
+  const isLight = document.body.classList.toggle("light");
+  localStorage.setItem("theme", isLight ? "light" : "dark");
+  this.textContent = isLight ? "🌙" : "☀️";
+});
+
+// ── Global Search ──────────────────────────────────────────────
+let searchTimer;
+const searchInput = document.getElementById("globalSearch");
+const searchDrop  = document.getElementById("searchDropdown");
+
+searchInput?.addEventListener("input", function(){
+  clearTimeout(searchTimer);
+  const q = this.value.trim();
+  if(q.length < 2){ searchDrop.classList.remove("open"); return; }
+  searchTimer = setTimeout(() => runSearch(q), 300);
+});
+
+searchInput?.addEventListener("blur", () => {
+  setTimeout(() => searchDrop.classList.remove("open"), 200);
+});
+
+async function runSearch(q){
+  try{
+    const [people, jobs] = await Promise.allSettled([
+      API.get("/connections/search?q=" + encodeURIComponent(q)),
+      API.get("/jobs/?title=" + encodeURIComponent(q) + "&per_page=4"),
+    ]);
+    let html = "";
+    if(people.status==="fulfilled" && people.value.users.length){
+      html += '<div class="search-section-title">People</div>';
+      html += people.value.users.slice(0,4).map(u=>`
+        <div class="search-result-item" onclick="window.location='/connections'">
+          <div class="search-result-avatar">${u.avatar}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${escHtml(u.full_name)}</div>
+            <div class="search-result-sub">${escHtml(u.headline||u.location||"")}</div>
+          </div>
+        </div>`).join("");
+    }
+    if(jobs.status==="fulfilled" && jobs.value.jobs.length){
+      html += '<div class="search-section-title">Jobs</div>';
+      html += jobs.value.jobs.slice(0,4).map(j=>`
+        <div class="search-result-item" onclick="window.location='/jobs'">
+          <div class="search-result-avatar" style="border-radius:8px;background:var(--surface);color:var(--accent)">${(j.company||"?")[0]}</div>
+          <div class="search-result-info">
+            <div class="search-result-name">${escHtml(j.title)}</div>
+            <div class="search-result-sub">${escHtml(j.company||"")} · ${escHtml(j.location||"")}</div>
+          </div>
+        </div>`).join("");
+    }
+    if(!html) html = '<div class="empty-state" style="padding:20px">No results for "'+escHtml(q)+'"</div>';
+    searchDrop.innerHTML = html;
+    searchDrop.classList.add("open");
+  }catch(e){ console.error(e); }
+}
+
+// ── Notifications ──────────────────────────────────────────────
+let notifOpen = false;
+
+document.getElementById("notifBell")?.addEventListener("click", async function(e){
+  e.stopPropagation();
+  notifOpen = !notifOpen;
+  document.getElementById("notifDropdown").classList.toggle("open", notifOpen);
+  if(notifOpen) await loadNotifications();
+});
+
+document.addEventListener("click", () => {
+  notifOpen = false;
+  document.getElementById("notifDropdown")?.classList.remove("open");
+});
+document.getElementById("notifDropdown")?.addEventListener("click", e => e.stopPropagation());
+
+async function loadNotifications(){
+  const list = document.getElementById("notifList");
+  try{
+    const r = await API.get("/notifications/");
+    updateNotifCount(r.unread_count);
+    if(!r.notifications.length){
+      list.innerHTML = '<div class="empty-state" style="padding:24px">No notifications yet.</div>';
+      return;
+    }
+    list.innerHTML = r.notifications.map(n => `
+      <div class="notif-item ${n.is_read?'':'unread'}" onclick="handleNotif(${n.id},'${n.link||''}')">
+        <div class="notif-avatar">${n.actor_avatar}</div>
+        <div class="notif-body">
+          <div class="notif-title">${escHtml(n.title)}</div>
+          <div class="notif-sub">${escHtml(n.body||"")}</div>
+          <div class="notif-time">${timeAgo(n.created_at)}</div>
+        </div>
+        ${n.is_read?'':'<div class="notif-dot"></div>'}
+      </div>`).join("");
+  }catch(e){ list.innerHTML='<div class="empty-state" style="padding:24px">Error loading.</div>'; }
+}
+
+async function handleNotif(nid, link){
+  await API.post("/notifications/mark-read", {notification_id: nid});
+  if(link) window.location.href = link;
+  notifOpen = false;
+  document.getElementById("notifDropdown")?.classList.remove("open");
+}
+
+async function markAllRead(){
+  await API.post("/notifications/mark-read", {});
+  updateNotifCount(0);
+  await loadNotifications();
+}
+
+function updateNotifCount(n){
+  const badge = document.getElementById("notifCount");
+  const sideBadge = document.getElementById("sideNotifCount");
+  if(badge){ badge.textContent=n; badge.style.display=n>0?"block":"none"; }
+  if(sideBadge){ sideBadge.textContent=n; sideBadge.style.display=n>0?"inline-flex":"none"; }
+}
+
+// PWA skipped per user preference
+</script>
+</body>
+</html>

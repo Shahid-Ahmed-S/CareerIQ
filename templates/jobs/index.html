@@ -1,0 +1,116 @@
+{% extends "base.html" %}
+{% block title %}Jobs — CareerIQ{% endblock %}
+{% block page_title %}Job Board{% endblock %}
+{% block content %}
+<div class="jobs-layout">
+  <div class="filters-bar">
+    <input type="text" id="ft" placeholder="Job title…" class="filter-input"/>
+    <input type="text" id="fl" placeholder="Location…" class="filter-input"/>
+    <select id="fjt" class="filter-select"><option value="">All types</option><option value="full-time">Full-time</option><option value="part-time">Part-time</option><option value="contract">Contract</option><option value="remote">Remote</option></select>
+    <select id="fxl" class="filter-select"><option value="">All levels</option><option value="entry">Entry</option><option value="mid">Mid</option><option value="senior">Senior</option><option value="lead">Lead</option></select>
+    <button class="btn btn-primary" onclick="doSearch()">Search</button>
+  </div>
+  <div id="currNote" class="currency-note" style="display:none">Salaries shown in <strong id="currCode"></strong> · based on your profile location</div>
+  <div id="jobsGrid" class="jobs-grid"><div class="empty-state">Loading jobs…</div></div>
+  <div class="pagination-row" id="pgn"></div>
+</div>
+<div class="modal-overlay" id="jobModal" style="display:none">
+  <div class="modal"><button class="modal-close" onclick="document.getElementById('jobModal').style.display='none'">✕</button><div id="modalContent"></div></div>
+</div>
+<script>
+let pg=1,savedIds=new Set();
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='jobs']")?.classList.add("active");
+  await Currency.init();
+  const code=Currency.getCode();
+  if(code!=="USD"){document.getElementById("currCode").textContent=code;document.getElementById("currNote").style.display="block";}
+  try{const s=await API.get("/saved-jobs/ids");savedIds=new Set(s.saved_job_ids);}catch{}
+  await loadJobs();
+})();
+function doSearch(){pg=1;loadJobs();}
+document.getElementById("ft").addEventListener("keydown",e=>{if(e.key==="Enter")doSearch();});
+async function loadJobs(){
+  const g=document.getElementById("jobsGrid");
+  g.innerHTML='<div class="empty-state">Loading…</div>';
+  const p=new URLSearchParams();
+  const t=document.getElementById("ft").value,l=document.getElementById("fl").value,jt=document.getElementById("fjt").value,xl=document.getElementById("fxl").value;
+  if(t)p.set("title",t);if(l)p.set("location",l);if(jt)p.set("job_type",jt);if(xl)p.set("experience_level",xl);
+  p.set("page",pg);p.set("per_page",12);
+  try{
+    const r=await API.get("/jobs/?"+p);
+    if(!r.jobs.length){g.innerHTML='<div class="empty-state">No jobs found.</div>';document.getElementById("pgn").innerHTML="";return;}
+    g.innerHTML=r.jobs.map(j=>{
+      const saved=savedIds.has(j.id);
+      const sal=j.salary_min?`<div class="job-salary">${Currency.format(j.salary_min,j.salary_max)}</div>`:"";
+      const sk=(j.skills||[]).slice(0,4).map(s=>`<span class="skill-chip">${s.skill_name}</span>`).join("");
+      return `<div class="job-card">
+        <div class="job-card-header">
+          <div class="job-company-logo">${(j.company||"?")[0]}</div>
+          <div style="flex:1">
+            <div class="job-title" onclick="openJob(${j.id})">${j.title}</div>
+            <div class="job-company">${j.company||"Unknown"}</div>
+          </div>
+          <button class="btn-icon bookmark-btn" onclick="toggleSave(${j.id},this)" title="${saved?"Unsave":"Save"}">
+            <svg viewBox="0 0 24 24" style="width:18px;height:18px"><path d="M19 21l-7-5-7 5V5a2 2 0 012-2h10a2 2 0 012 2z" fill="${saved?"var(--accent)":"none"}" stroke="var(--accent)"/></svg>
+          </button>
+        </div>
+        <div class="job-meta">
+          <span class="tag tag-blue">${j.location||"Remote"}</span>
+          <span class="tag tag-purple">${j.job_type||"—"}</span>
+          <span class="tag tag-green">${j.experience_level||"—"}</span>
+        </div>
+        ${sal}
+        <div class="job-skills-preview">${sk}</div>
+        <div style="margin-top:10px;display:flex;gap:8px">
+          <button class="btn btn-primary btn-sm" onclick="trackApply(${j.id},this)">Track application</button>
+        </div>
+      </div>`;
+    }).join("");
+    const pn=document.getElementById("pgn");pn.innerHTML="";
+    for(let i=1;i<=r.pages;i++){
+      const b=document.createElement("button");
+      b.className="page-btn"+(i===pg?" active":"");b.textContent=i;
+      b.onclick=(function(x){return function(){pg=x;loadJobs();};})(i);
+      pn.appendChild(b);
+    }
+  }catch(e){g.innerHTML='<div class="empty-state">Error: '+e.message+'</div>';}
+}
+async function toggleSave(jid,btn){
+  const saved=savedIds.has(jid);
+  try{
+    if(saved){await API.delete("/saved-jobs/"+jid);savedIds.delete(jid);}
+    else{await API.post("/saved-jobs/",{job_id:jid});savedIds.add(jid);}
+    btn.querySelector("path").setAttribute("fill",savedIds.has(jid)?"var(--accent)":"none");
+  }catch(e){alert(e.message);}
+}
+async function trackApply(jid,btn){
+  try{
+    await API.post("/applications/",{job_id:jid});
+    btn.textContent="✓ Tracked";btn.disabled=true;btn.style.background="var(--green)";
+  }catch(e){
+    if(e.message.includes("Already")){btn.textContent="✓ Tracked";btn.disabled=true;}
+    else alert(e.message);
+  }
+}
+async function openJob(jid){
+  const modal=document.getElementById("jobModal"),c=document.getElementById("modalContent");
+  modal.style.display="flex";c.innerHTML='<div class="empty-state">Loading…</div>';
+  try{
+    const r=await API.get("/jobs/"+jid);
+    const j=r.job;
+    const sal=j.salary_min?`<div class="modal-salary">💰 ${Currency.format(j.salary_min,j.salary_max)} <span class="salary-usd-note">(USD $${j.salary_min.toLocaleString()}–$${(j.salary_max||0).toLocaleString()})</span></div>`:"";
+    c.innerHTML=`<h2 class="modal-title">${j.title}</h2>
+    <div class="modal-meta"><strong>${j.company||"Unknown"}</strong> · ${j.location||"Remote"} · <span class="tag tag-purple">${j.job_type}</span> <span class="tag tag-green">${j.experience_level}</span></div>
+    ${sal}
+    <div class="modal-section"><h3>Required skills</h3><div>${(j.skills||[]).map(s=>`<span class="skill-chip ${s.is_required?"skill-chip-accent":""}">${s.skill_name}</span>`).join("")}</div></div>
+    <div class="modal-section"><h3>Description</h3><p>${j.description||"No description."}</p></div>
+    <div style="display:flex;gap:10px;margin-top:8px">
+      <button class="btn btn-primary" onclick="trackApply(${j.id},this)">Track application</button>
+      <button class="btn btn-outline" onclick="toggleSave(${j.id},this)">Bookmark</button>
+      ${j.source_url?`<a href="${j.source_url}" target="_blank" class="btn btn-outline">Apply externally →</a>`:""}
+    </div>`;
+  }catch(e){c.innerHTML='<div class="empty-state">Failed to load.</div>';}
+}
+</script>
+{% endblock %}

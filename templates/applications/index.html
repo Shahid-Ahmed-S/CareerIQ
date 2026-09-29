@@ -1,0 +1,82 @@
+{% extends "base.html" %}
+{% block title %}Applications — CareerIQ{% endblock %}
+{% block page_title %}Application Tracker{% endblock %}
+{% block content %}
+<div class="tracker-layout">
+  <div class="stage-counts" id="stageCounts"></div>
+  <div class="kanban-board" id="kanban"><div class="empty-state">Loading…</div></div>
+</div>
+<div class="modal-overlay" id="editModal" style="display:none">
+  <div class="modal modal--sm">
+    <button class="modal-close" onclick="document.getElementById('editModal').style.display='none'">✕</button>
+    <h3 class="modal-title">Update application</h3>
+    <div class="field" style="margin-top:16px"><label>Stage</label>
+      <select id="editStatus">
+        <option value="applied">Applied</option><option value="screening">Screening</option>
+        <option value="interview">Interview</option><option value="offer">Offer</option>
+        <option value="rejected">Rejected</option><option value="withdrawn">Withdrawn</option>
+      </select>
+    </div>
+    <div class="field"><label>Notes</label><textarea id="editNotes" rows="4" placeholder="Interview date, contacts, next steps…"></textarea></div>
+    <div style="display:flex;gap:10px">
+      <button class="btn btn-primary" onclick="saveEdit()">Save</button>
+      <button class="btn btn-danger" onclick="deleteApp()">Remove</button>
+    </div>
+  </div>
+</div>
+<script>
+const STAGES=["applied","screening","interview","offer","rejected","withdrawn"];
+const SLABELS={applied:"Applied",screening:"Screening",interview:"Interview",offer:"Offer 🎉",rejected:"Rejected",withdrawn:"Withdrawn"};
+const SCOLORS={applied:"var(--accent)",screening:"var(--purple)",interview:"var(--amber)",offer:"var(--green)",rejected:"var(--red)",withdrawn:"var(--text3)"};
+let allApps=[],editId=null;
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='applications']")?.classList.add("active");
+  await load();
+})();
+async function load(){
+  try{
+    const r=await API.get("/applications/");
+    allApps=r.applications;
+    document.getElementById("stageCounts").innerHTML=STAGES.map(s=>`<div class="stage-pill"><span class="stage-dot" style="background:${SCOLORS[s]}"></span>${SLABELS[s]} <strong>${r.counts[s]||0}</strong></div>`).join("");
+    const b=document.getElementById("kanban");
+    if(!allApps.length){b.innerHTML='<div class="empty-state" style="grid-column:1/-1">No applications yet. Go to Jobs and start applying!</div>';return;}
+    b.innerHTML=STAGES.filter(s=>allApps.some(a=>a.status===s)||["applied","screening","interview","offer"].includes(s)).map(s=>{
+      const apps=allApps.filter(a=>a.status===s);
+      return `<div class="kanban-col">
+        <div class="kanban-col-header" style="border-color:${SCOLORS[s]}">${SLABELS[s]}<span class="kanban-count">${apps.length}</span></div>
+        <div class="kanban-cards">${apps.length?apps.map(a=>`<div class="kanban-card" onclick="openEdit(${a.id})">
+          <div class="kc-title">${(a.job||{}).title||"Unknown Role"}</div>
+          <div class="kc-company">${(a.job||{}).company||"Unknown"} · ${(a.job||{}).location||"Remote"}</div>
+          ${a.notes?`<div class="kc-note">${a.notes.slice(0,60)}…</div>`:""}
+          <div class="kc-date">Applied ${new Date(a.applied_at).toLocaleDateString()}</div>
+        </div>`).join(""):'<div class="kanban-empty">Empty</div>'}
+        </div>
+      </div>`;
+    }).join("");
+  }catch(e){document.getElementById("kanban").innerHTML='<div class="empty-state">Error: '+e.message+'</div>';}
+}
+function openEdit(aid){
+  const a=allApps.find(x=>x.id===aid);if(!a) return;
+  editId=aid;
+  document.getElementById("editStatus").value=a.status;
+  document.getElementById("editNotes").value=a.notes||"";
+  document.getElementById("editModal").style.display="flex";
+}
+async function saveEdit(){
+  try{
+    await API.patch("/applications/"+editId,{status:document.getElementById("editStatus").value,notes:document.getElementById("editNotes").value});
+    document.getElementById("editModal").style.display="none";
+    await load();
+  }catch(e){alert(e.message);}
+}
+async function deleteApp(){
+  if(!confirm("Remove this application?")) return;
+  try{
+    await API.delete("/applications/"+editId);
+    document.getElementById("editModal").style.display="none";
+    await load();
+  }catch(e){alert(e.message);}
+}
+</script>
+{% endblock %}

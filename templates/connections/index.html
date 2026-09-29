@@ -1,0 +1,118 @@
+{% extends "base.html" %}
+{% block title %}Network — CareerIQ{% endblock %}
+{% block page_title %}My Network{% endblock %}
+{% block content %}
+<div class="connections-layout">
+  <div class="card">
+    <div class="card-header"><h2 class="card-title">Find people</h2></div>
+    <div class="search-bar">
+      <input type="text" id="searchInput" placeholder="Search by name, role, or company…"/>
+      <button class="btn btn-primary" onclick="searchPeople()">Search</button>
+    </div>
+    <div id="searchResults" style="margin-top:16px"></div>
+  </div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">Pending requests</h2><span id="pendingCount" class="count-badge">0</span></div>
+      <div id="pendingList"><div class="empty-state">No pending requests.</div></div>
+    </div>
+    <div class="card">
+      <div class="card-header"><h2 class="card-title">My connections</h2><span id="connCount" class="count-badge">0</span></div>
+      <div id="connList" class="connection-grid"><div class="empty-state">No connections yet.</div></div>
+    </div>
+  </div>
+</div>
+
+<script>
+(async()=>{
+  requireAuth(); loadUserChip();
+  document.querySelector("[data-page='connections']")?.classList.add("active");
+  await Promise.all([loadPending(), loadConnections()]);
+})();
+document.getElementById("searchInput").addEventListener("keydown",e=>{if(e.key==="Enter")searchPeople();});
+
+async function searchPeople(){
+  const q=document.getElementById("searchInput").value.trim();
+  if(q.length<2) return;
+  const c=document.getElementById("searchResults");
+  c.innerHTML='<div class="empty-state">Searching…</div>';
+  try{
+    const r=await API.get("/connections/search?q="+encodeURIComponent(q));
+    if(!r.users.length){c.innerHTML='<div class="empty-state">No users found.</div>';return;}
+    c.innerHTML='<div class="search-results">'+r.users.map(u=>{
+      let btn="";
+      if(!u.connection_status) btn=`<button class="btn btn-sm btn-primary" onclick="sendReq(${u.id},this)">Connect</button>`;
+      else if(u.connection_status==="pending") btn=`<button class="btn btn-sm btn-outline" disabled>Pending</button>`;
+      else if(u.connection_status==="accepted") btn=`<button class="btn btn-sm" style="background:rgba(34,197,94,.15);color:var(--green);border:none" disabled>✓ Connected</button>`;
+      return `<div class="person-card">
+        <div class="person-avatar-lg">${u.avatar}</div>
+        <div class="person-name">${escHtml(u.full_name)}</div>
+        <div class="person-headline">${escHtml(u.headline||"")}</div>
+        <div class="person-location">${escHtml(u.location||"")}</div>
+        ${btn}
+      </div>`;
+    }).join("")+'</div>';
+  }catch(e){c.innerHTML='<div class="empty-state">Error: '+e.message+'</div>';}
+}
+
+async function sendReq(uid,btn){
+  try{
+    await API.post("/connections/request/"+uid);
+    btn.textContent="Pending"; btn.disabled=true; btn.className="btn btn-sm btn-outline";
+  }catch(e){alert(e.message);}
+}
+
+async function loadPending(){
+  try{
+    const r=await API.get("/connections/pending");
+    document.getElementById("pendingCount").textContent=r.pending.length;
+    const c=document.getElementById("pendingList");
+    if(!r.pending.length){c.innerHTML='<div class="empty-state">No pending requests.</div>';return;}
+    c.innerHTML=r.pending.map(p=>`<div class="pending-item">
+      <div class="person-avatar-lg" style="width:40px;height:40px;font-size:1rem">${p.other_user?.avatar||"?"}</div>
+      <div class="pending-info">
+        <div class="pending-name">${escHtml(p.other_user?.full_name||"")}</div>
+        <div class="pending-headline">${escHtml(p.other_user?.headline||"")}</div>
+      </div>
+      <div class="pending-actions">
+        <button class="btn btn-sm btn-primary" onclick="accept(${p.id},this)">Accept</button>
+        <button class="btn btn-sm btn-outline" onclick="reject(${p.id},this)">Decline</button>
+      </div>
+    </div>`).join("");
+  }catch(e){}
+}
+
+async function accept(cid,btn){
+  try{await API.post("/connections/"+cid+"/accept");await Promise.all([loadPending(),loadConnections()]);}
+  catch(e){alert(e.message);}
+}
+async function reject(cid,btn){
+  try{await API.post("/connections/"+cid+"/reject");await loadPending();}
+  catch(e){alert(e.message);}
+}
+
+async function loadConnections(){
+  try{
+    const r=await API.get("/connections/");
+    document.getElementById("connCount").textContent=r.connections.length;
+    const c=document.getElementById("connList");
+    if(!r.connections.length){c.innerHTML='<div class="empty-state">No connections yet.</div>';return;}
+    c.innerHTML=r.connections.map(cn=>`<div class="person-card">
+      <div class="person-avatar-lg">${cn.other_user?.avatar||"?"}</div>
+      <div class="person-name">${escHtml(cn.other_user?.full_name||"")}</div>
+      <div class="person-headline">${escHtml(cn.other_user?.headline||"")}</div>
+      <div style="display:flex;gap:8px;margin-top:4px">
+        <a href="/messages?user=${cn.other_user?.id}" class="btn btn-sm btn-outline">Message</a>
+        <button class="btn btn-sm btn-danger" onclick="removeConn(${cn.id},this)">Remove</button>
+      </div>
+    </div>`).join("");
+  }catch(e){}
+}
+async function removeConn(cid,btn){
+  if(!confirm("Remove connection?")) return;
+  try{await API.delete("/connections/"+cid);await loadConnections();}
+  catch(e){alert(e.message);}
+}
+</script>
+{% endblock %}
